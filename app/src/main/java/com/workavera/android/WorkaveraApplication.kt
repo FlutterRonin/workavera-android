@@ -8,6 +8,7 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
+import com.workavera.android.data.ApiKeysRepository
 import com.workavera.android.data.AuthRepository
 import com.workavera.android.data.BoardRepository
 import com.workavera.android.data.DashboardRepository
@@ -45,6 +46,7 @@ class AppContainer(context: Context) {
     val api = PocketBaseApi(httpClient, json)
     val authRepository = AuthRepository(api, settings)
     val preferencesRepository = PreferencesRepository(api, authRepository, settings)
+    val apiKeysRepository = ApiKeysRepository(api, authRepository)
     val responseCache = ResponseCache(context, json)
     val dashboardRepository = DashboardRepository(api, authRepository, responseCache)
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)

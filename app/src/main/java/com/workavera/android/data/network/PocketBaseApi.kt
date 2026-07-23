@@ -1,8 +1,10 @@
 package com.workavera.android.data.network
 
+import com.workavera.android.data.model.ApiKey
 import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.data.model.AuthResponse
 import com.workavera.android.data.model.AvatarUpload
+import com.workavera.android.data.model.CreatedApiKey
 import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.BoardLabel
 import com.workavera.android.data.model.BoardMember
@@ -91,6 +93,13 @@ class PocketBaseApi(
 
     @Serializable
     private data class DeactivatePayload(val deactivated: Boolean)
+
+    @Serializable
+    private data class CreateApiKeyPayload(
+        val name: String,
+        val allowDestructive: Boolean,
+        val expires: String,
+    )
 
     @Serializable
     private data class UpdatePreferencesPayload(
@@ -222,6 +231,43 @@ class PocketBaseApi(
                     memoryAutoCapture = memoryAutoCapture,
                 ),
             )
+        }
+
+    // ---- API keys (MCP access) ----
+
+    /** Lists the signed-in user's API keys, newest first. */
+    suspend fun getApiKeys(server: String, token: String): List<ApiKey> =
+        request<RecordListResponse<ApiKey>>(
+            server,
+            "api/collections/api_keys/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("sort", "-created")
+            parameter("perPage", "200")
+        }.items
+
+    /**
+     * Creates a key via the custom endpoint (the server generates and hashes the
+     * secret) and returns the one-time plaintext key. [expires] is an ISO-8601
+     * timestamp, or empty for a key that never expires.
+     */
+    suspend fun createApiKey(
+        server: String,
+        token: String,
+        name: String,
+        expires: String,
+        allowDestructive: Boolean,
+    ): CreatedApiKey = request(server, "api/apikeys", HttpMethod.Post) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(CreateApiKeyPayload(name = name, allowDestructive = allowDestructive, expires = expires))
+    }
+
+    /** Revokes (hard-deletes) a key; connected MCP clients lose access immediately. */
+    suspend fun revokeApiKey(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/api_keys/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
         }
 
     /** PocketBase file URL, e.g. a user avatar. Returns null when fileName is empty. */

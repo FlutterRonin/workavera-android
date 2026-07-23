@@ -25,10 +25,12 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
@@ -62,6 +64,7 @@ import com.workavera.android.data.AuthState
 import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.ErrorBanner
+import com.workavera.android.ui.settings.ApiKeysScreen
 
 private const val PRIVACY_POLICY_URL =
     "https://github.com/xusenlin/workavera-ios/blob/main/docs/PrivacyPolicy.md"
@@ -83,6 +86,7 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
 
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showApiKeys by remember { mutableStateOf(false) }
 
     val openUrl: (String) -> Unit = { url ->
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -136,6 +140,18 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                     checked = memory.memoryAutoCapture,
                     enabled = memory.memoryEnabled,
                     onCheckedChange = viewModel::setMemoryAutoCapture,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+
+            SettingsGroup(
+                title = "Developer",
+                footer = "Connect third-party MCP clients to your Workavera tools.",
+            ) {
+                NavRow(
+                    icon = Icons.Outlined.Key,
+                    title = "API Keys",
+                    onClick = { showApiKeys = true },
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -210,6 +226,10 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 )
             }
         }
+    }
+
+    if (showApiKeys) {
+        ApiKeysScreen(onDismiss = { showApiKeys = false })
     }
 
     if (showSignOutConfirm) {
@@ -375,6 +395,36 @@ private fun SettingsRow(
             modifier = Modifier.weight(1f),
         )
         value()
+    }
+}
+
+/** Tappable row with a leading icon and a trailing chevron, opening a sub-screen. */
+@Composable
+private fun NavRow(
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowIcon(icon)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.Outlined.ChevronRight,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
