@@ -44,7 +44,7 @@ fun SettingsScreen(state: AuthState.LoggedIn) {
             }
             Spacer(Modifier.height(12.dp))
             SettingsCard(title = "About") {
-                KeyValueRow("App version", "0.1.0 (preview)")
+                KeyValueRow("App version", "0.1.1 (preview)")
             }
             Spacer(Modifier.height(16.dp))
             Text(
