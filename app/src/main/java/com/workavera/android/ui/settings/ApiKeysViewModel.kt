@@ -36,8 +36,12 @@ class ApiKeysViewModel(
 
     val serverAddress: String get() = repository.serverAddress
 
+    /** Cache-first: render the disk snapshot, then refresh over the network. */
     fun loadIfNeeded() {
         if (uiState.hasLoaded || uiState.isLoading) return
+        repository.cachedKeys()?.let { cached ->
+            uiState = uiState.copy(keys = cached, hasLoaded = true)
+        }
         refresh()
     }
 

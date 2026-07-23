@@ -48,8 +48,12 @@ class SavedMemoriesViewModel(
     var uiState by mutableStateOf(SavedMemoriesUiState())
         private set
 
+    /** Cache-first: render the disk snapshot, then refresh over the network. */
     fun loadIfNeeded() {
         if (uiState.hasLoaded || uiState.isLoading) return
+        repository.cachedMemories()?.let { cached ->
+            uiState = uiState.copy(memories = cached, hasLoaded = true)
+        }
         refresh()
     }
 
