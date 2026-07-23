@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.UnfoldMore
@@ -66,6 +68,8 @@ import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.settings.ApiKeysScreen
+import com.workavera.android.ui.settings.ModelConfigurationsScreen
+import com.workavera.android.ui.settings.ModelSharingScreen
 import com.workavera.android.ui.settings.SavedMemoriesScreen
 
 private const val PRIVACY_POLICY_URL =
@@ -90,6 +94,8 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showApiKeys by remember { mutableStateOf(false) }
     var showSavedMemories by remember { mutableStateOf(false) }
+    var showModelConfigs by remember { mutableStateOf(false) }
+    var showModelSharing by remember { mutableStateOf(false) }
 
     val openUrl: (String) -> Unit = { url ->
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -111,6 +117,24 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 ErrorBanner(message = ui.error, onRetry = viewModel::dismissError)
                 Spacer(Modifier.height(16.dp))
             }
+
+            SettingsGroup(
+                title = "Large Language Model",
+                footer = "Add at least one model configuration to use Chat and AI summaries.",
+            ) {
+                NavRow(
+                    icon = Icons.Outlined.AutoAwesome,
+                    title = "Model Configurations",
+                    onClick = { showModelConfigs = true },
+                )
+                SettingsDivider()
+                NavRow(
+                    icon = Icons.Outlined.IosShare,
+                    title = "Model Sharing",
+                    onClick = { showModelSharing = true },
+                )
+            }
+            Spacer(Modifier.height(20.dp))
 
             SettingsGroup(title = "Server") {
                 SettingsRow(icon = Icons.Outlined.Dns, title = "Address") {
@@ -237,6 +261,12 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
         }
     }
 
+    if (showModelConfigs) {
+        ModelConfigurationsScreen(onDismiss = { showModelConfigs = false })
+    }
+    if (showModelSharing) {
+        ModelSharingScreen(onDismiss = { showModelSharing = false })
+    }
     if (showApiKeys) {
         ApiKeysScreen(onDismiss = { showApiKeys = false })
     }

@@ -12,6 +12,7 @@ import com.workavera.android.data.ApiKeysRepository
 import com.workavera.android.data.AuthRepository
 import com.workavera.android.data.BoardRepository
 import com.workavera.android.data.DashboardRepository
+import com.workavera.android.data.LlmModelsRepository
 import com.workavera.android.data.NotificationRepository
 import com.workavera.android.data.PreferencesRepository
 import com.workavera.android.data.ResponseCache
@@ -53,6 +54,7 @@ class AppContainer(context: Context) {
     val dashboardRepository = DashboardRepository(api, authRepository, responseCache)
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)
     val boardRepository = BoardRepository(api, authRepository, responseCache)
+    val llmModelsRepository = LlmModelsRepository(api, authRepository, responseCache)
 }
 
 class WorkaveraApplication : Application(), SingletonImageLoader.Factory {

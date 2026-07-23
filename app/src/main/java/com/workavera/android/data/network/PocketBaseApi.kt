@@ -14,6 +14,9 @@ import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardStateCategory
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.DashboardSummary
+import com.workavera.android.data.model.LlmModel
+import com.workavera.android.data.model.LlmModelInput
+import com.workavera.android.data.model.LlmShareTarget
 import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.NotificationPage
 import com.workavera.android.data.model.NotificationRealtimeEvent
@@ -108,6 +111,12 @@ class PocketBaseApi(
 
     @Serializable
     private data class MemoryActivePayload(val active: Boolean)
+
+    @Serializable
+    private data class ShareModelPayload(val userIds: List<String>)
+
+    @Serializable
+    private data class ShareModelResponse(val shared: Int = 0)
 
     @Serializable
     private data class UpdatePreferencesPayload(
@@ -333,6 +342,51 @@ class PocketBaseApi(
         requestEmpty(server, "api/collections/chat_memories/records/$id", HttpMethod.Delete) {
             header(HttpHeaders.Authorization, token)
         }
+
+    // ---- LLM model configurations (custom /api/llm endpoints) ----
+
+    /** Lists the user's model configurations (secrets replaced by a hasApiKey flag). */
+    suspend fun getLlmModels(server: String, token: String): List<LlmModel> =
+        request(server, "api/llm/models", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun createLlmModel(server: String, token: String, input: LlmModelInput): LlmModel =
+        request(server, "api/llm/models", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(input)
+        }
+
+    suspend fun updateLlmModel(server: String, token: String, id: String, input: LlmModelInput): LlmModel =
+        request(server, "api/llm/models/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(input)
+        }
+
+    suspend fun deleteLlmModel(server: String, token: String, id: String) =
+        requestEmpty(server, "api/llm/models/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun setDefaultLlmModel(server: String, token: String, id: String): LlmModel =
+        request(server, "api/llm/models/$id/default", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun getLlmShareTargets(server: String, token: String): List<LlmShareTarget> =
+        request(server, "api/llm/share-targets", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /** Shares a model with the given users; returns how many invitations were sent. */
+    suspend fun shareLlmModel(server: String, token: String, id: String, userIds: List<String>): Int =
+        request<ShareModelResponse>(server, "api/llm/models/$id/share", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(ShareModelPayload(userIds = userIds))
+        }.shared
 
     /** PocketBase file URL, e.g. a user avatar. Returns null when fileName is empty. */
     fun fileUrl(server: String, collectionId: String, recordId: String, fileName: String): String? {
