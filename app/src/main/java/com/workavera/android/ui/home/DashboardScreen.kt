@@ -33,7 +33,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -51,6 +50,7 @@ import com.workavera.android.ui.AppSection
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.components.ErrorBanner
+import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.theme.color
 import java.time.LocalTime
@@ -75,14 +75,14 @@ fun DashboardScreen(
         dashboardViewModel.loadIfNeeded()
     }
 
-    PullToRefreshBox(
+    ExpressivePullToRefreshBox(
         isRefreshing = ui.isLoading,
         onRefresh = dashboardViewModel::refresh,
         modifier = Modifier.fillMaxSize(),
     ) {
         if (!ui.hasLoaded && ui.isLoading) {
             LoadingIndicator("Loading dashboard…")
-            return@PullToRefreshBox
+            return@ExpressivePullToRefreshBox
         }
 
         Column(

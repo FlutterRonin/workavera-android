@@ -1,7 +1,9 @@
 package com.workavera.android.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -64,13 +66,20 @@ private val DarkColors = darkColorScheme(
     outlineVariant = Color(0xFF3A3A3A),
 )
 
+/**
+ * Material 3 Expressive theme with the app's own monochrome color scheme:
+ * we take the expressive spring-physics motion but keep the black-and-white
+ * brand palette instead of expressive/dynamic colors.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WorkaveraTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
+    MaterialExpressiveTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
+        motionScheme = MotionScheme.expressive(),
         typography = Typography(),
         content = content,
     )

@@ -52,7 +52,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,6 +78,7 @@ import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.components.ErrorBanner
+import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.PaginationBar
 import com.workavera.android.ui.theme.color
@@ -130,7 +130,7 @@ fun BoardScreen(state: AuthState.LoggedIn) {
         if (selectedTaskId != null && selectedTask == null) selectedTaskId = null
     }
 
-    PullToRefreshBox(
+    ExpressivePullToRefreshBox(
         isRefreshing = ui.isLoading,
         onRefresh = { boardViewModel.refresh() },
         modifier = Modifier.fillMaxSize(),

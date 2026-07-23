@@ -50,7 +50,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,6 +67,7 @@ import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.AppNotificationType
 import com.workavera.android.data.model.ModelShareStatus
 import com.workavera.android.ui.components.ErrorBanner
+import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.PaginationBar
 import com.workavera.android.ui.theme.StatusOnline
@@ -89,7 +89,7 @@ fun NotificationsScreen(viewModel: NotificationViewModel) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        PullToRefreshBox(
+        ExpressivePullToRefreshBox(
             isRefreshing = ui.isLoading,
             onRefresh = { viewModel.refresh() },
             modifier = Modifier.weight(1f),
