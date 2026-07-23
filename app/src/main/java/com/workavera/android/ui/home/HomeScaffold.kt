@@ -204,7 +204,7 @@ private fun HomeContent(
                     when (section) {
                         AppSection.DASHBOARD -> DashboardScreen(state, viewModel, onOpenSection)
                         AppSection.PROFILE -> ProfileScreen(state, viewModel)
-                        AppSection.SETTINGS -> SettingsScreen(state)
+                        AppSection.SETTINGS -> SettingsScreen(state, viewModel)
                         AppSection.NOTIFICATIONS -> NotificationsScreen(notificationViewModel)
                         AppSection.BOARD -> BoardScreen(state)
                         else -> PlaceholderScreen(section)

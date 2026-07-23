@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.workavera.android.data.model.AppAppearance
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -24,10 +25,18 @@ class SettingsRepository(private val context: Context) {
         val LAST_LOGIN_EMAIL = stringPreferencesKey("last_login_email")
         val AUTH_TOKEN = stringPreferencesKey("auth_token")
         val AUTH_TOKEN_SERVER = stringPreferencesKey("auth_token_server")
+        val APPEARANCE = stringPreferencesKey("appearance")
     }
 
     val serverAddress: Flow<String> =
         context.dataStore.data.map { it[Keys.SERVER_ADDRESS] ?: "" }
+
+    /**
+     * Persisted appearance, so the theme applies instantly at launch (before the
+     * server preferences load) and offline — mirroring the iOS fallbackAppearance.
+     */
+    val appearance: Flow<AppAppearance> =
+        context.dataStore.data.map { AppAppearance.fromRaw(it[Keys.APPEARANCE]) }
 
     val lastLoginEmail: Flow<String> =
         context.dataStore.data.map { it[Keys.LAST_LOGIN_EMAIL] ?: "" }
@@ -44,6 +53,10 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setLastLoginEmail(email: String) {
         context.dataStore.edit { it[Keys.LAST_LOGIN_EMAIL] = email.trim() }
+    }
+
+    suspend fun setAppearance(appearance: AppAppearance) {
+        context.dataStore.edit { it[Keys.APPEARANCE] = appearance.raw }
     }
 
     suspend fun setAuthToken(token: String, server: String) {

@@ -12,6 +12,7 @@ import com.workavera.android.data.AuthRepository
 import com.workavera.android.data.BoardRepository
 import com.workavera.android.data.DashboardRepository
 import com.workavera.android.data.NotificationRepository
+import com.workavera.android.data.PreferencesRepository
 import com.workavera.android.data.ResponseCache
 import com.workavera.android.data.SettingsRepository
 import com.workavera.android.data.network.PocketBaseApi
@@ -43,6 +44,7 @@ class AppContainer(context: Context) {
     val settings = SettingsRepository(context)
     val api = PocketBaseApi(httpClient, json)
     val authRepository = AuthRepository(api, settings)
+    val preferencesRepository = PreferencesRepository(api, authRepository, settings)
     val responseCache = ResponseCache(context, json)
     val dashboardRepository = DashboardRepository(api, authRepository, responseCache)
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)

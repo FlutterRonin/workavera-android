@@ -1,5 +1,6 @@
 package com.workavera.android.data.network
 
+import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.data.model.AuthResponse
 import com.workavera.android.data.model.AvatarUpload
 import com.workavera.android.data.model.AppNotification
@@ -17,6 +18,7 @@ import com.workavera.android.data.model.ProfileUpdate
 import com.workavera.android.data.model.RecordListResponse
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.model.User
+import com.workavera.android.data.model.UserPreferences
 import com.workavera.android.data.model.UserStatus
 import com.workavera.android.data.model.parseServerDate
 import io.ktor.client.HttpClient
@@ -85,6 +87,16 @@ class PocketBaseApi(
         val oldPassword: String,
         val password: String,
         val passwordConfirm: String,
+    )
+
+    @Serializable
+    private data class DeactivatePayload(val deactivated: Boolean)
+
+    @Serializable
+    private data class UpdatePreferencesPayload(
+        val theme: String? = null,
+        @SerialName("memory_enabled") val memoryEnabled: Boolean? = null,
+        @SerialName("memory_auto_capture") val memoryAutoCapture: Boolean? = null,
     )
 
     /** PocketBase list response envelope; count queries only read totalItems. */
@@ -162,6 +174,55 @@ class PocketBaseApi(
             ),
         )
     }
+
+    /**
+     * Soft-deletes the account by setting the `deactivated` flag. A hard delete
+     * would cascade to all of the user's data and orphan shared team data, so
+     * the server models account removal as deactivation.
+     */
+    suspend fun deactivateAccount(server: String, token: String, userId: String): User =
+        request(server, "api/collections/users/records/$userId", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(DeactivatePayload(deactivated = true))
+        }
+
+    /** Loads the single user_preferences record for the owner (theme + memory flags). */
+    suspend fun getPreferences(server: String, token: String, userId: String): UserPreferences {
+        val response = request<RecordListResponse<UserPreferences>>(
+            server,
+            "api/collections/user_preferences/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("filter", "owner = \"$userId\"")
+            parameter("page", "1")
+            parameter("perPage", "1")
+        }
+        return response.items.firstOrNull()
+            ?: throw ApiException(404, "User preferences were not found.")
+    }
+
+    /** Partially updates preferences; only non-null fields are sent. */
+    suspend fun updatePreferences(
+        server: String,
+        token: String,
+        id: String,
+        theme: AppAppearance? = null,
+        memoryEnabled: Boolean? = null,
+        memoryAutoCapture: Boolean? = null,
+    ): UserPreferences =
+        request(server, "api/collections/user_preferences/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(
+                UpdatePreferencesPayload(
+                    theme = theme?.raw,
+                    memoryEnabled = memoryEnabled,
+                    memoryAutoCapture = memoryAutoCapture,
+                ),
+            )
+        }
 
     /** PocketBase file URL, e.g. a user avatar. Returns null when fileName is empty. */
     fun fileUrl(server: String, collectionId: String, recordId: String, fileName: String): String? {

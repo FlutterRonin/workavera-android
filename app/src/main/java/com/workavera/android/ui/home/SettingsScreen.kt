@@ -1,32 +1,98 @@
 package com.workavera.android.ui.home
 
+import android.content.Intent
+import androidx.core.net.toUri
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Brightness6
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.UnfoldMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.workavera.android.BuildConfig
 import com.workavera.android.data.AuthState
-import com.workavera.android.ui.components.KeyValueRow
+import com.workavera.android.data.model.AppAppearance
+import com.workavera.android.ui.AuthViewModel
+import com.workavera.android.ui.components.ErrorBanner
 
-/** Settings screen: shows real account / server info for now; the remaining settings come later. */
+private const val PRIVACY_POLICY_URL =
+    "https://github.com/xusenlin/workavera-ios/blob/main/docs/PrivacyPolicy.md"
+private const val REPOSITORY_URL = "https://github.com/xusenlin/workavera"
+private const val REPOSITORY_LABEL = "xusenlin/workavera"
+
+/**
+ * Settings screen, mirroring the iOS SettingsView sections: Server, Memory,
+ * Appearance, Account (sign out + delete), and About. Model Configurations and
+ * API Keys arrive as their own sub-screens in later releases.
+ */
 @Composable
-fun SettingsScreen(state: AuthState.LoggedIn) {
+fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
+    val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory)
+    val appearance by viewModel.appearance.collectAsStateWithLifecycle()
+    val memory by viewModel.memory.collectAsStateWithLifecycle()
+    val ui = viewModel.uiState
+    val context = LocalContext.current
+
+    var showSignOutConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    val openUrl: (String) -> Unit = { url ->
+        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
@@ -34,39 +100,397 @@ fun SettingsScreen(state: AuthState.LoggedIn) {
                 .widthIn(max = 560.dp)
                 .fillMaxWidth(),
         ) {
-            SettingsCard(title = "Account") {
-                KeyValueRow("Email", state.user.email)
-                KeyValueRow("Name", state.user.name)
+            if (ui.error != null) {
+                ErrorBanner(message = ui.error, onRetry = viewModel::dismissError)
+                Spacer(Modifier.height(16.dp))
             }
-            Spacer(Modifier.height(12.dp))
-            SettingsCard(title = "Server") {
-                KeyValueRow("Address", state.server)
+
+            SettingsGroup(title = "Server") {
+                SettingsRow(icon = Icons.Outlined.Dns, title = "Address") {
+                    Text(
+                        text = state.server,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                    )
+                }
             }
-            Spacer(Modifier.height(12.dp))
-            SettingsCard(title = "About") {
-                KeyValueRow("App version", "0.1.1 (preview)")
+            Spacer(Modifier.height(20.dp))
+
+            SettingsGroup(
+                title = "Memory",
+                footer = "Reuse facts and preferences you allow across chat sessions. " +
+                    "Off by default.",
+            ) {
+                SwitchRow(
+                    icon = Icons.Outlined.Psychology,
+                    title = "Use Chat Memory",
+                    checked = memory.memoryEnabled,
+                    onCheckedChange = viewModel::setMemoryEnabled,
+                )
+                SettingsDivider()
+                SwitchRow(
+                    icon = Icons.Outlined.Psychology,
+                    title = "Automatic Capture",
+                    checked = memory.memoryAutoCapture,
+                    enabled = memory.memoryEnabled,
+                    onCheckedChange = viewModel::setMemoryAutoCapture,
+                )
             }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(20.dp))
+
+            SettingsGroup(title = "Appearance") {
+                AppearanceRow(
+                    current = appearance,
+                    onSelect = viewModel::updateAppearance,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+
+            SettingsGroup(title = "Account") {
+                SettingsRow(icon = Icons.Outlined.Email, title = "Email") {
+                    Text(
+                        text = state.user.email,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                SettingsDivider()
+                ActionRow(
+                    icon = Icons.AutoMirrored.Outlined.Logout,
+                    title = "Sign Out",
+                    tint = MaterialTheme.colorScheme.error,
+                    onClick = { showSignOutConfirm = true },
+                )
+                SettingsDivider()
+                ActionRow(
+                    icon = Icons.Outlined.Delete,
+                    title = "Delete Account",
+                    tint = MaterialTheme.colorScheme.error,
+                    enabled = !ui.isDeletingAccount,
+                    onClick = { showDeleteConfirm = true },
+                    trailing = {
+                        if (ui.isDeletingAccount) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        }
+                    },
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            SettingsFooter(
+                "Deletes your account and signs you out on every device. You won't be able " +
+                    "to sign back in, and this can't be undone from the app.",
+            )
+            Spacer(Modifier.height(20.dp))
+
+            SettingsGroup(title = "About") {
+                SettingsRow(icon = Icons.Outlined.Info, title = "Version") {
+                    Text(
+                        text = "v${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                SettingsDivider()
+                LinkRow(
+                    title = "Privacy Policy",
+                    onClick = { openUrl(PRIVACY_POLICY_URL) },
+                )
+                SettingsDivider()
+                LinkRow(
+                    title = "GitHub",
+                    value = REPOSITORY_LABEL,
+                    onClick = { openUrl(REPOSITORY_URL) },
+                )
+            }
+        }
+    }
+
+    if (showSignOutConfirm) {
+        ConfirmDialog(
+            title = "Sign out of Workavera?",
+            message = "Your session will be removed from this device.",
+            confirmLabel = "Sign Out",
+            onConfirm = {
+                showSignOutConfirm = false
+                authViewModel.logout()
+            },
+            onDismiss = { showSignOutConfirm = false },
+        )
+    }
+    if (showDeleteConfirm) {
+        ConfirmDialog(
+            title = "Delete your account?",
+            message = "Your account will be deleted and you'll be signed out on every device. " +
+                "You won't be able to sign back in, and this can't be undone from the app.",
+            confirmLabel = "Delete Account",
+            onConfirm = {
+                showDeleteConfirm = false
+                viewModel.deleteAccount()
+            },
+            onDismiss = { showDeleteConfirm = false },
+        )
+    }
+}
+
+@Composable
+private fun AppearanceRow(
+    current: AppAppearance,
+    onSelect: (AppAppearance) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RowIcon(Icons.Outlined.Brightness6)
+            Spacer(Modifier.width(14.dp))
             Text(
-                text = "Appearance, API keys, model configurations, and saved memories " +
-                    "are coming in a later release.",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Theme",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = current.label,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            AppAppearance.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    trailingIcon = {
+                        if (option == current) {
+                            Icon(
+                                Icons.Outlined.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun SettingsCard(title: String, content: @Composable () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Spacer(Modifier.height(8.dp))
-            content()
-        }
+private fun SettingsGroup(
+    title: String,
+    footer: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, bottom = 6.dp),
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        content = content,
+    )
+    if (footer != null) {
+        Spacer(Modifier.height(6.dp))
+        SettingsFooter(footer)
     }
+}
+
+@Composable
+private fun SettingsFooter(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant,
+        modifier = Modifier.padding(start = 48.dp),
+    )
+}
+
+@Composable
+private fun RowIcon(icon: ImageVector, tint: Color = MaterialTheme.colorScheme.onSurfaceVariant) {
+    Icon(
+        icon,
+        contentDescription = null,
+        modifier = Modifier.size(20.dp),
+        tint = tint,
+    )
+}
+
+/** Static row: leading icon + title on the left, trailing [value] content on the right. */
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    value: @Composable () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowIcon(icon)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        value()
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    icon: ImageVector,
+    title: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowIcon(icon)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier.weight(1f),
+        )
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+@Composable
+private fun ActionRow(
+    icon: ImageVector,
+    title: String,
+    tint: Color,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RowIcon(icon, tint = tint)
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tint,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
+    }
+}
+
+/** External-link row: title on the left, optional [value] + open-in-new icon on the right. */
+@Composable
+private fun LinkRow(
+    title: String,
+    value: String? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        if (value != null) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Icon(
+            Icons.AutoMirrored.Outlined.OpenInNew,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmLabel, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }

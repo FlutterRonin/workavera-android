@@ -88,6 +88,16 @@ class AuthRepository(
         _state.value = AuthState.LoggedOut
     }
 
+    /**
+     * Deactivates (soft-deletes) the account on the server, then tears down the
+     * local session like [logout]. The server invalidates the session too.
+     */
+    suspend fun deleteAccount() {
+        val current = _state.value as? AuthState.LoggedIn ?: return
+        api.deactivateAccount(current.server, current.token, current.user.id)
+        logout()
+    }
+
     suspend fun updateStatus(status: UserStatus) {
         val current = _state.value as? AuthState.LoggedIn ?: return
         val updated = api.updateStatus(current.server, current.token, current.user.id, status)
