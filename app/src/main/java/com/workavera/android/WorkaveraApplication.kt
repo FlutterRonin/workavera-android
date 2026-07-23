@@ -11,6 +11,7 @@ import coil3.svg.SvgDecoder
 import com.workavera.android.data.ApiKeysRepository
 import com.workavera.android.data.AuthRepository
 import com.workavera.android.data.BoardRepository
+import com.workavera.android.data.CalendarRepository
 import com.workavera.android.data.DashboardRepository
 import com.workavera.android.data.LlmModelsRepository
 import com.workavera.android.data.NotificationRepository
@@ -55,6 +56,7 @@ class AppContainer(context: Context) {
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)
     val boardRepository = BoardRepository(api, authRepository, responseCache)
     val llmModelsRepository = LlmModelsRepository(api, authRepository, responseCache)
+    val calendarRepository = CalendarRepository(api, authRepository, responseCache)
 }
 
 class WorkaveraApplication : Application(), SingletonImageLoader.Factory {

@@ -56,6 +56,7 @@ import com.workavera.android.data.AuthState
 import com.workavera.android.ui.AppSection
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.board.BoardScreen
+import com.workavera.android.ui.calendar.CalendarScreen
 import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.notifications.NotificationViewModel
 import com.workavera.android.ui.notifications.NotificationsScreen
@@ -207,6 +208,7 @@ private fun HomeContent(
                         AppSection.SETTINGS -> SettingsScreen(state, viewModel)
                         AppSection.NOTIFICATIONS -> NotificationsScreen(notificationViewModel)
                         AppSection.BOARD -> BoardScreen(state)
+                        AppSection.CALENDAR -> CalendarScreen()
                         else -> PlaceholderScreen(section)
                     }
                 }

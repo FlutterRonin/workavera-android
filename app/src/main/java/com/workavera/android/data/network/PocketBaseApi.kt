@@ -4,6 +4,10 @@ import com.workavera.android.data.model.ApiKey
 import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.data.model.AuthResponse
 import com.workavera.android.data.model.AvatarUpload
+import com.workavera.android.data.model.CalendarEvent
+import com.workavera.android.data.model.CalendarEventInput
+import com.workavera.android.data.model.CalendarSnapshot
+import com.workavera.android.data.model.CalendarTaskDeadline
 import com.workavera.android.data.model.CreatedApiKey
 import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.BoardLabel
@@ -52,6 +56,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -117,6 +122,40 @@ class PocketBaseApi(
 
     @Serializable
     private data class ShareModelResponse(val shared: Int = 0)
+
+    @Serializable
+    private data class SystemConfig(val timezone: String = "")
+
+    @Serializable
+    private data class CalendarEventPayload(
+        val owner: String? = null,
+        val title: String,
+        val description: String,
+        @SerialName("start_at") val startAt: String,
+        @SerialName("end_at") val endAt: String,
+        @SerialName("all_day") val allDay: Boolean,
+        val timezone: String,
+        val location: String,
+        val color: String,
+        @SerialName("recurrence_frequency") val recurrenceFrequency: String,
+        @SerialName("recurrence_interval") val recurrenceInterval: Int,
+        @SerialName("reminder_minutes_before") val reminderMinutesBefore: Int,
+    ) {
+        constructor(owner: String?, input: CalendarEventInput) : this(
+            owner = owner,
+            title = input.title,
+            description = input.description,
+            startAt = formatServerInstant(input.startAt),
+            endAt = formatServerInstant(input.endAt),
+            allDay = input.allDay,
+            timezone = input.timezone,
+            location = input.location,
+            color = input.color.raw,
+            recurrenceFrequency = input.recurrenceFrequency.raw,
+            recurrenceInterval = input.recurrenceInterval,
+            reminderMinutesBefore = input.reminder.minutes,
+        )
+    }
 
     @Serializable
     private data class UpdatePreferencesPayload(
@@ -854,6 +893,70 @@ class PocketBaseApi(
         setBody(TaskDueDatePayload(dueDate = dueDate?.let(::formatServerInstant) ?: ""))
     }
 
+    // ---- Calendar (events + task deadlines + timezone) ----
+
+    /**
+     * Calendar snapshot, matching the iOS getCalendarSnapshot: events and
+     * board-task deadlines loaded concurrently, plus the workspace timezone
+     * from /api/configs/system (applied to every event).
+     */
+    suspend fun getCalendarSnapshot(server: String, token: String): CalendarSnapshot = coroutineScope {
+        val eventsDeferred = async {
+            listAll<CalendarEvent>(server, token, "calendar_events", "", "start_at")
+        }
+        val tasksDeferred = async {
+            listAll<CalendarTaskDeadline>(
+                server, token, "board_tasks", "due_date != \"\"", "due_date", expand = "project,state",
+            )
+        }
+        val configDeferred = async {
+            runCatching {
+                request<SystemConfig>(server, "api/configs/system", HttpMethod.Get) {
+                    header(HttpHeaders.Authorization, token)
+                }
+            }.getOrNull()
+        }
+        val rawZone = configDeferred.await()?.timezone.orEmpty()
+        val timezone = if (runCatching { ZoneId.of(rawZone) }.isSuccess) rawZone else ZoneId.systemDefault().id
+        val events = eventsDeferred.await().map { it.copy(timezone = timezone) }
+        CalendarSnapshot(events = events, tasks = tasksDeferred.await(), timezone = timezone)
+    }
+
+    suspend fun createCalendarEvent(
+        server: String,
+        token: String,
+        ownerId: String,
+        input: CalendarEventInput,
+    ): CalendarEvent =
+        request(server, "api/collections/calendar_events/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(CalendarEventPayload(owner = ownerId, input = input))
+        }
+
+    suspend fun updateCalendarEvent(
+        server: String,
+        token: String,
+        id: String,
+        input: CalendarEventInput,
+    ): CalendarEvent =
+        request(server, "api/collections/calendar_events/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(CalendarEventPayload(owner = null, input = input))
+        }
+
+    suspend fun deleteCalendarEvent(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/calendar_events/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /** Calendar realtime signals (payloads ignored; any calendar/task event triggers a refresh). */
+    fun calendarRealtimeSignals(server: String, token: String): Flow<Unit> =
+        realtimeFrames(server, token, CALENDAR_REALTIME_TOPICS)
+            .filter { frame -> CALENDAR_REALTIME_PREFIXES.any { frame.event.startsWith(it) } }
+            .map { }
+
     // ---- Realtime subscriptions (PocketBase SSE, same mechanism as iOS realtimeEvents) ----
 
     @Serializable
@@ -1045,6 +1148,10 @@ class PocketBaseApi(
         )
         private val BOARD_REALTIME_PREFIXES =
             BOARD_REALTIME_TOPICS.map { it.removeSuffix("/*") }
+
+        private val CALENDAR_REALTIME_TOPICS = listOf("calendar_events/*", "board_tasks/*")
+        private val CALENDAR_REALTIME_PREFIXES =
+            CALENDAR_REALTIME_TOPICS.map { it.removeSuffix("/*") }
 
         /** ISO-8601 UTC with milliseconds, matching the iOS dashboardDate format. */
         private val serverInstantFormatter =
