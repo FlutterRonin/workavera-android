@@ -13,12 +13,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Delete
@@ -405,6 +409,117 @@ private fun whenText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boolean)
     if (allDay) return start.format(detailDateFormat) + " · All day"
     val end = occurrence.endAt.atZone(zone)
     return "${start.format(detailDateFormat)}  ${start.format(detailTimeFormat)} – ${end.format(detailTimeFormat)}"
+}
+
+/** Full-screen list of every custom event (iOS AllEventsListSheet). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun AllEventsSheet(
+    events: List<CalendarEvent>,
+    zone: ZoneId,
+    onEventClick: (EventOccurrence) -> Unit,
+    onNewEvent: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val sorted = remember(events) { events.sortedBy { it.startAt } }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("All Events") },
+                        navigationIcon = {
+                            IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Done") }
+                        },
+                        actions = {
+                            IconButton(onClick = onNewEvent) { Icon(Icons.Filled.Add, contentDescription = "New event") }
+                        },
+                    )
+                },
+            ) { padding ->
+                if (sorted.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text("No Custom Events", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Events you create appear here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(padding),
+                        contentPadding = PaddingValues(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        item {
+                            Text(
+                                text = "${sorted.size} ${if (sorted.size == 1) "event" else "events"}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        items(sorted, key = { it.id }) { event ->
+                            AllEventRow(event = event, zone = zone) {
+                                onEventClick(EventOccurrence(event, event.startAt, event.endAt))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllEventRow(event: CalendarEvent, zone: ZoneId, onClick: () -> Unit) {
+    val color = parseHexColor(event.eventColor.hex, MaterialTheme.colorScheme.primary)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(modifier = Modifier.width(4.dp).height(38.dp).background(color, RoundedCornerShape(2.dp)))
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = event.title.ifEmpty { "Untitled event" },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = allEventWhen(event, zone),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (event.location.isNotEmpty()) {
+                Text(
+                    text = event.location,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private fun allEventWhen(event: CalendarEvent, zone: ZoneId): String {
+    val start = event.startAt.atZone(zone)
+    val base = if (event.allDay) {
+        "${start.format(detailDateFormat)} · All day"
+    } else {
+        "${start.format(detailDateFormat)}  ${start.format(detailTimeFormat)}"
+    }
+    return if (event.frequency != EventRecurrenceFrequency.NONE) "$base · ${recurrenceText(event)}" else base
 }
 
 private fun recurrenceText(event: CalendarEvent): String {

@@ -6,12 +6,12 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,11 +27,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -49,7 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +61,7 @@ import com.workavera.android.data.model.EventRecurrenceFrequency
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.theme.color
 import com.workavera.android.ui.theme.parseHexColor
 import java.time.LocalDate
 import java.time.YearMonth
@@ -91,6 +91,7 @@ fun CalendarScreen() {
     var detailOccurrence by remember { mutableStateOf<EventOccurrence?>(null) }
     var detailTask by remember { mutableStateOf<CalendarTaskDeadline?>(null) }
     var editorFor by remember { mutableStateOf<EditorState?>(null) }
+    var showAllEvents by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadIfNeeded()
@@ -117,6 +118,17 @@ fun CalendarScreen() {
                         if (ui.error != null) {
                             ErrorBanner(message = ui.error, onRetry = viewModel::refresh)
                             Spacer(Modifier.height(16.dp))
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            TextButton(onClick = { showAllEvents = true }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.List,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("All events")
+                            }
                         }
                         MonthCard(
                             month = displayedMonth,
@@ -185,6 +197,22 @@ fun CalendarScreen() {
             onDismiss = { editorFor = null },
         )
     }
+
+    if (showAllEvents) {
+        AllEventsSheet(
+            events = ui.events,
+            zone = zone,
+            onEventClick = {
+                showAllEvents = false
+                detailOccurrence = it
+            },
+            onNewEvent = {
+                showAllEvents = false
+                editorFor = EditorState(event = null, date = selectedDate)
+            },
+            onDismiss = { showAllEvents = false },
+        )
+    }
 }
 
 private data class EditorState(val event: CalendarEvent?, val date: LocalDate)
@@ -246,14 +274,13 @@ private fun MonthCard(
             ) {
                 items(monthCells(month)) { day ->
                     if (day == null) {
-                        Box(modifier = Modifier.aspectRatio(1f))
+                        Box(modifier = Modifier.height(48.dp))
                     } else {
                         DayCell(
                             day = day,
                             isSelected = day == selectedDate,
                             isToday = day == today,
-                            dotColors = dayDotColors(day, zone, events),
-                            hasTasks = tasks.any { it.dueDay == day.toString() },
+                            dotColors = dayItemColors(day, zone, events, tasks),
                             onClick = { onSelect(day) },
                         )
                     }
@@ -269,47 +296,54 @@ private fun DayCell(
     isSelected: Boolean,
     isToday: Boolean,
     dotColors: List<Color>,
-    hasTasks: Boolean,
     onClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
-            .aspectRatio(1f)
-            .padding(2.dp)
-            .clip(CircleShapeSmall())
-            .background(if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .clickable(onClick = onClick),
+            .fillMaxWidth()
+            .height(48.dp)
+            // No ripple: selection is shown by the circle, matching the iOS plain
+            // button (avoids a square highlight filling the cell bounds).
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = day.dayOfMonth.toString(),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            color = when {
-                isSelected -> MaterialTheme.colorScheme.onPrimary
-                isToday -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.onSurface
-            },
-        )
-        Spacer(Modifier.height(2.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            dotColors.take(3).forEach { color ->
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .background(if (isSelected) MaterialTheme.colorScheme.onPrimary else color, CircleShape),
-                )
-            }
-            if (hasTasks) {
-                Box(
-                    modifier = Modifier
-                        .size(4.dp)
-                        .background(
-                            if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            CircleShape,
-                        ),
-                )
+        // The selected/today highlight wraps only the day number; the dots below
+        // keep their own colors (matching the iOS day cell).
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .then(
+                    when {
+                        isSelected -> Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
+                        isToday -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        else -> Modifier
+                    },
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = day.dayOfMonth.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (isToday || isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                    isToday -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurface
+                },
+            )
+        }
+        Spacer(Modifier.height(3.dp))
+        Row(
+            modifier = Modifier.height(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            dotColors.take(3).forEach { dot ->
+                Box(modifier = Modifier.size(5.dp).background(dot, CircleShape))
             }
         }
     }
@@ -416,13 +450,14 @@ private fun TaskRow(task: CalendarTaskDeadline, onClick: () -> Unit) {
             .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
-        Icon(
-            Icons.Outlined.Event,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Priority-colored bar, matching the day-cell task dots.
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(38.dp)
+                .background(task.taskPriority.color, RoundedCornerShape(2.dp)),
         )
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -433,6 +468,17 @@ private fun TaskRow(task: CalendarTaskDeadline, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (task.description.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = task.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(2.dp))
             Text(
                 text = "${task.projectName} · Task deadline",
                 style = MaterialTheme.typography.labelSmall,
@@ -440,6 +486,7 @@ private fun TaskRow(task: CalendarTaskDeadline, onClick: () -> Unit) {
             )
         }
         if (task.completed) {
+            Spacer(Modifier.width(8.dp))
             Text(
                 text = "Done",
                 style = MaterialTheme.typography.labelSmall,
@@ -465,15 +512,29 @@ private fun monthCells(month: YearMonth): List<LocalDate?> {
     return cells
 }
 
-private fun dayDotColors(day: LocalDate, zone: ZoneId, events: List<CalendarEvent>): List<Color> =
-    events.filter { it.occurrencesOverlapping(day, zone).isNotEmpty() }
-        .map { parseHexColorOrDefault(it.eventColor.hex) }
-        .distinct()
+/**
+ * One dot color per calendar item on [day], matching iOS: events use their own
+ * color, task deadlines use their priority color (so high/urgent show orange/red,
+ * medium shows blue, etc. — not a flat gray).
+ */
+private fun dayItemColors(
+    day: LocalDate,
+    zone: ZoneId,
+    events: List<CalendarEvent>,
+    tasks: List<CalendarTaskDeadline>,
+): List<Color> {
+    val dayKey = day.toString()
+    val eventColors = events
+        .flatMap { it.occurrencesOverlapping(day, zone) }
+        .map { parseHexColorOrDefault(it.event.eventColor.hex) }
+    val taskColors = tasks
+        .filter { it.dueDay == dayKey }
+        .map { it.taskPriority.color }
+    return eventColors + taskColors
+}
 
 private fun parseHexColorOrDefault(hex: String): Color =
     runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(Color.Gray)
-
-private fun CircleShapeSmall() = RoundedCornerShape(10.dp)
 
 private fun timeRangeText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boolean): String {
     if (allDay) return "All day"

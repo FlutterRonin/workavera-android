@@ -118,6 +118,19 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 Spacer(Modifier.height(16.dp))
             }
 
+            SettingsGroup(title = "Server") {
+                SettingsRow(icon = Icons.Outlined.Dns, title = "Address") {
+                    Text(
+                        text = state.server,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+
             SettingsGroup(
                 title = "Large Language Model",
                 footer = "Add at least one model configuration to use Chat and AI summaries.",
@@ -136,16 +149,15 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
             }
             Spacer(Modifier.height(20.dp))
 
-            SettingsGroup(title = "Server") {
-                SettingsRow(icon = Icons.Outlined.Dns, title = "Address") {
-                    Text(
-                        text = state.server,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.MiddleEllipsis,
-                    )
-                }
+            SettingsGroup(
+                title = "Developer",
+                footer = "Connect third-party MCP clients to your Workavera tools.",
+            ) {
+                NavRow(
+                    icon = Icons.Outlined.Key,
+                    title = "API Keys",
+                    onClick = { showApiKeys = true },
+                )
             }
             Spacer(Modifier.height(20.dp))
 
