@@ -15,6 +15,7 @@ import com.workavera.android.data.DashboardRepository
 import com.workavera.android.data.NotificationRepository
 import com.workavera.android.data.PreferencesRepository
 import com.workavera.android.data.ResponseCache
+import com.workavera.android.data.SavedMemoriesRepository
 import com.workavera.android.data.SettingsRepository
 import com.workavera.android.data.network.PocketBaseApi
 import io.ktor.client.HttpClient
@@ -47,6 +48,7 @@ class AppContainer(context: Context) {
     val authRepository = AuthRepository(api, settings)
     val preferencesRepository = PreferencesRepository(api, authRepository, settings)
     val apiKeysRepository = ApiKeysRepository(api, authRepository)
+    val savedMemoriesRepository = SavedMemoriesRepository(api, authRepository)
     val responseCache = ResponseCache(context, json)
     val dashboardRepository = DashboardRepository(api, authRepository, responseCache)
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)

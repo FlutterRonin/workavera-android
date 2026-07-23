@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -65,6 +66,7 @@ import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.settings.ApiKeysScreen
+import com.workavera.android.ui.settings.SavedMemoriesScreen
 
 private const val PRIVACY_POLICY_URL =
     "https://github.com/xusenlin/workavera-ios/blob/main/docs/PrivacyPolicy.md"
@@ -87,6 +89,7 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showApiKeys by remember { mutableStateOf(false) }
+    var showSavedMemories by remember { mutableStateOf(false) }
 
     val openUrl: (String) -> Unit = { url ->
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -140,6 +143,12 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                     checked = memory.memoryAutoCapture,
                     enabled = memory.memoryEnabled,
                     onCheckedChange = viewModel::setMemoryAutoCapture,
+                )
+                SettingsDivider()
+                NavRow(
+                    icon = Icons.Outlined.Archive,
+                    title = "Saved Memories",
+                    onClick = { showSavedMemories = true },
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -230,6 +239,12 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
 
     if (showApiKeys) {
         ApiKeysScreen(onDismiss = { showApiKeys = false })
+    }
+    if (showSavedMemories) {
+        SavedMemoriesScreen(
+            memoryEnabled = memory.memoryEnabled,
+            onDismiss = { showSavedMemories = false },
+        )
     }
 
     if (showSignOutConfirm) {

@@ -14,10 +14,12 @@ import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardStateCategory
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.DashboardSummary
+import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.NotificationPage
 import com.workavera.android.data.model.NotificationRealtimeEvent
 import com.workavera.android.data.model.ProfileUpdate
 import com.workavera.android.data.model.RecordListResponse
+import com.workavera.android.data.model.SavedChatMemory
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.model.User
 import com.workavera.android.data.model.UserPreferences
@@ -100,6 +102,12 @@ class PocketBaseApi(
         val allowDestructive: Boolean,
         val expires: String,
     )
+
+    @Serializable
+    private data class MemoryContentPayload(val category: String, val content: String)
+
+    @Serializable
+    private data class MemoryActivePayload(val active: Boolean)
 
     @Serializable
     private data class UpdatePreferencesPayload(
@@ -267,6 +275,62 @@ class PocketBaseApi(
     /** Revokes (hard-deletes) a key; connected MCP clients lose access immediately. */
     suspend fun revokeApiKey(server: String, token: String, id: String) =
         requestEmpty(server, "api/collections/api_keys/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    // ---- Saved chat memories ----
+
+    /** Lists the signed-in user's saved memories, most recently updated first. */
+    suspend fun getSavedMemories(server: String, token: String): List<SavedChatMemory> =
+        request<RecordListResponse<SavedChatMemory>>(
+            server,
+            "api/collections/chat_memories/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("sort", "-updated")
+            parameter("perPage", "200")
+        }.items
+
+    suspend fun createSavedMemory(
+        server: String,
+        token: String,
+        category: MemoryCategory,
+        content: String,
+    ): SavedChatMemory =
+        request(server, "api/collections/chat_memories/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(MemoryContentPayload(category = category.raw, content = content))
+        }
+
+    suspend fun updateSavedMemory(
+        server: String,
+        token: String,
+        id: String,
+        category: MemoryCategory,
+        content: String,
+    ): SavedChatMemory =
+        request(server, "api/collections/chat_memories/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(MemoryContentPayload(category = category.raw, content = content))
+        }
+
+    suspend fun setSavedMemoryActive(
+        server: String,
+        token: String,
+        id: String,
+        active: Boolean,
+    ): SavedChatMemory =
+        request(server, "api/collections/chat_memories/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(MemoryActivePayload(active = active))
+        }
+
+    suspend fun deleteSavedMemory(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/chat_memories/records/$id", HttpMethod.Delete) {
             header(HttpHeaders.Authorization, token)
         }
 
