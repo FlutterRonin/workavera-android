@@ -25,6 +25,8 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.BackHand
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
@@ -78,9 +81,9 @@ private const val REPOSITORY_URL = "https://github.com/xusenlin/workavera"
 private const val REPOSITORY_LABEL = "xusenlin/workavera"
 
 /**
- * Settings screen, mirroring the iOS SettingsView sections: Server, Memory,
- * Appearance, Account (sign out + delete), and About. Model Configurations and
- * API Keys arrive as their own sub-screens in later releases.
+ * Settings screen, mirroring the iOS SettingsView sections: Server, Large
+ * Language Model (Model Configurations + Model Sharing), Developer (API Keys),
+ * Memory, Appearance, Account (sign out + delete), and About.
  */
 @Composable
 fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
@@ -174,7 +177,7 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 )
                 SettingsDivider()
                 SwitchRow(
-                    icon = Icons.Outlined.Psychology,
+                    icon = Icons.Outlined.AutoFixHigh,
                     title = "Automatic Capture",
                     checked = memory.memoryAutoCapture,
                     enabled = memory.memoryEnabled,
@@ -185,18 +188,6 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                     icon = Icons.Outlined.Archive,
                     title = "Saved Memories",
                     onClick = { showSavedMemories = true },
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            SettingsGroup(
-                title = "Developer",
-                footer = "Connect third-party MCP clients to your Workavera tools.",
-            ) {
-                NavRow(
-                    icon = Icons.Outlined.Key,
-                    title = "API Keys",
-                    onClick = { showApiKeys = true },
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -260,11 +251,13 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 }
                 SettingsDivider()
                 LinkRow(
+                    icon = Icons.Outlined.BackHand,
                     title = "Privacy Policy",
                     onClick = { openUrl(PRIVACY_POLICY_URL) },
                 )
                 SettingsDivider()
                 LinkRow(
+                    icon = Icons.Outlined.Link,
                     title = "GitHub",
                     value = REPOSITORY_LABEL,
                     onClick = { openUrl(REPOSITORY_URL) },
@@ -381,7 +374,7 @@ private fun SettingsGroup(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Text(
-        text = title.uppercase(),
+        text = title,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier
@@ -543,9 +536,10 @@ private fun ActionRow(
     }
 }
 
-/** External-link row: title on the left, optional [value] + open-in-new icon on the right. */
+/** External-link row: leading icon + title, optional [value] + open-in-new icon on the right. */
 @Composable
 private fun LinkRow(
+    icon: ImageVector,
     title: String,
     value: String? = null,
     onClick: () -> Unit,
@@ -557,6 +551,8 @@ private fun LinkRow(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        RowIcon(icon)
+        Spacer(Modifier.width(14.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,

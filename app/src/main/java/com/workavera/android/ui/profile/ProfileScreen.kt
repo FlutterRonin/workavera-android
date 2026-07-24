@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -57,16 +56,27 @@ import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.components.StatusSelect
 
 /**
+ * Trigger for the Edit action in the home top bar (the iOS toolbar's "Edit"
+ * button). The button is rendered by HomeScaffold; the dialog stays here.
+ */
+class ProfileTopBarState {
+    var showEditProfile by mutableStateOf(false)
+}
+
+/**
  * Profile screen, styled after the grouped list of the iOS ProfileView: small
  * gray titles outside the groups + white hairline-border cards (hairline row
  * dividers), avoiding large gray blocks. Edit profile / change password use
  * full-screen dialogs per Android's Material 3 form conventions.
  */
 @Composable
-fun ProfileScreen(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
+fun ProfileScreen(
+    state: AuthState.LoggedIn,
+    viewModel: AuthViewModel,
+    topBarState: ProfileTopBarState = remember { ProfileTopBarState() },
+) {
     val user = state.user
     val ui = viewModel.profileUiState
-    var showEditProfile by remember { mutableStateOf(false) }
     var showChangePassword by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showAvatarPreview by remember { mutableStateOf(false) }
@@ -126,16 +136,6 @@ fun ProfileScreen(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = { showEditProfile = true }) {
-                Icon(
-                    Icons.Outlined.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Edit Profile")
-            }
             Spacer(Modifier.height(28.dp))
 
             GroupTitle("Status")
@@ -231,11 +231,11 @@ fun ProfileScreen(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
         }
     }
 
-    if (showEditProfile) {
+    if (topBarState.showEditProfile) {
         EditProfileDialog(
             state = state,
             viewModel = viewModel,
-            onDismiss = { showEditProfile = false },
+            onDismiss = { topBarState.showEditProfile = false },
         )
     }
     if (showChangePassword) {

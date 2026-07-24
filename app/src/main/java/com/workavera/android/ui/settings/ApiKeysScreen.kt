@@ -4,12 +4,14 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,7 +26,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,25 +33,30 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.GppMaybe
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.UnfoldMore
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +66,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -81,6 +88,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val keyDateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
+
+/** iOS .orange, used for the one-time-secret warning. */
+private val WarningOrange = Color(0xFFFF9500)
 
 /**
  * API Keys management, mirroring the iOS APIKeysView: list of keys with revoke,
@@ -182,7 +192,7 @@ private fun KeyList(
         }
         item {
             Text(
-                text = "MCP ACCESS",
+                text = "MCP Access",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
@@ -273,7 +283,7 @@ private fun ApiKeyRow(key: ApiKey, isRevoking: Boolean, onRevoke: () -> Unit) {
                     Icons.Outlined.Delete,
                     contentDescription = "Revoke ${key.name}",
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -413,43 +423,78 @@ private fun CreateForm(
     enabled: Boolean,
     error: String?,
 ) {
-    Text(
-        text = "KEY DETAILS",
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Spacer(Modifier.height(8.dp))
-    OutlinedTextField(
-        value = name,
-        onValueChange = onNameChange,
-        label = { Text("Name") },
-        placeholder = { Text("e.g. Claude Code on my laptop") },
-        singleLine = true,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(12.dp))
-    ExpirationPicker(expiration = expiration, enabled = enabled, onSelect = onExpirationChange)
+    FormSectionTitle("Key Details")
+    FormCard {
+        TextField(
+            value = name,
+            onValueChange = onNameChange,
+            placeholder = { Text("e.g. Claude Code on my laptop") },
+            singleLine = true,
+            enabled = enabled,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        ExpirationRow(expiration = expiration, enabled = enabled, onSelect = onExpirationChange)
+    }
     Spacer(Modifier.height(20.dp))
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("Allow destructive actions", style = MaterialTheme.typography.bodyMedium)
+    FormCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                text = "Lets MCP clients delete tasks or events without another confirmation.",
+                "Allow destructive actions",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = allowDestructive,
+                onCheckedChange = onAllowDestructiveChange,
+                enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = MaterialTheme.colorScheme.error,
+                    checkedBorderColor = Color.Transparent,
+                ),
+            )
+        }
+    }
+    FormFooter("Allows MCP clients to delete tasks or calendar events without another confirmation.")
+    Spacer(Modifier.height(20.dp))
+
+    // One-time-secret hint (iOS lock.shield label in its own section).
+    FormCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Outlined.Lock,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = "The full key is shown once. Workavera stores only its hash.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.width(12.dp))
-        Switch(checked = allowDestructive, onCheckedChange = onAllowDestructiveChange, enabled = enabled)
     }
-    Spacer(Modifier.height(16.dp))
-    Text(
-        text = "The full key is shown once. Workavera stores only its hash.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
     if (error != null) {
         Spacer(Modifier.height(12.dp))
         Text(
@@ -461,28 +506,79 @@ private fun CreateForm(
 }
 
 @Composable
-private fun ExpirationPicker(
+internal fun FormSectionTitle(text: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
+    }
+}
+
+@Composable
+internal fun FormFooter(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp, top = 6.dp),
+    )
+}
+
+/** Grouped card matching the Settings section style. */
+@Composable
+internal fun FormCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun ExpirationRow(
     expiration: ApiKeyExpiration,
     enabled: Boolean,
     onSelect: (ApiKeyExpiration) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedTextField(
-            value = expiration.label,
-            onValueChange = {},
-            readOnly = true,
-            enabled = enabled,
-            label = { Text("Expiration") },
-            trailingIcon = { Icon(Icons.Outlined.UnfoldMore, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // Transparent overlay to capture taps on the read-only field.
-        Box(
+        Row(
             modifier = Modifier
-                .matchParentSize()
-                .clickable(enabled = enabled) { expanded = true },
-        )
+                .fillMaxWidth()
+                .clickable(enabled = enabled) { expanded = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Expiration",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = expiration.label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ApiKeyExpiration.entries.forEach { option ->
                 DropdownMenuItem(
@@ -501,16 +597,17 @@ private fun ExpirationPicker(
 private fun CreatedKeyView(createdKey: CreatedApiKey, serverAddress: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Outlined.WarningAmber,
+            Icons.Outlined.GppMaybe,
             contentDescription = null,
             modifier = Modifier.size(18.dp),
-            tint = MaterialTheme.colorScheme.tertiary,
+            tint = WarningOrange,
         )
         Spacer(Modifier.width(8.dp))
         Text(
             text = "This is the only time the full key is shown.",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
+            color = WarningOrange,
         )
     }
     Spacer(Modifier.height(20.dp))
@@ -544,7 +641,7 @@ private fun CopyCard(title: String, value: String, toast: String) {
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
-            OutlinedButton(onClick = { copyToClipboard(context, title, value, toast) }) {
+            TextButton(onClick = { copyToClipboard(context, title, value, toast) }) {
                 Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Copy")

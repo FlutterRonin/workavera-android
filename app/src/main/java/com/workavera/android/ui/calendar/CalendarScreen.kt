@@ -10,8 +10,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,15 +29,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +54,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,11 +66,11 @@ import com.workavera.android.data.model.CalendarEvent
 import com.workavera.android.data.model.CalendarTaskDeadline
 import com.workavera.android.data.model.EventOccurrence
 import com.workavera.android.data.model.EventRecurrenceFrequency
+import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
-import com.workavera.android.ui.theme.color
-import com.workavera.android.ui.theme.parseHexColor
+import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -74,13 +82,67 @@ private val agendaDayFormat = DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.
 private val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
 /**
+ * Priority tint used across the calendar (day dots, row bars, badges), matching
+ * the iOS TaskPriority.calendarColor: none/low → blue, medium/high → amber,
+ * urgent → red.
+ */
+internal val TaskPriority.calendarColor: Color
+    get() = when (this) {
+        TaskPriority.NONE, TaskPriority.LOW -> Color(0xFF3B82F6)
+        TaskPriority.MEDIUM, TaskPriority.HIGH -> Color(0xFFF59E0B)
+        TaskPriority.URGENT -> Color(0xFFEF4444)
+    }
+
+/** One agenda entry for a day: an event occurrence or a task deadline (iOS CalendarItem). */
+private sealed interface AgendaItem {
+    val title: String
+    val itemDescription: String
+    val tint: Color
+    val isAllDay: Boolean
+    val sortInstant: Instant
+    val isCompletedTask: Boolean
+
+    data class Event(val occurrence: EventOccurrence) : AgendaItem {
+        override val title get() = occurrence.event.title
+        override val itemDescription get() = occurrence.event.description
+        override val tint get() = parseHexColorOrDefault(occurrence.event.eventColor.hex)
+        override val isAllDay get() = occurrence.event.allDay
+        override val sortInstant get() = occurrence.startAt
+        override val isCompletedTask get() = false
+    }
+
+    data class Task(val task: CalendarTaskDeadline) : AgendaItem {
+        override val title get() = task.title
+        override val itemDescription get() = task.description
+        override val tint get() = task.taskPriority.calendarColor
+        override val isAllDay get() = true
+        override val sortInstant get() = Instant.MIN
+        override val isCompletedTask get() = task.completed
+    }
+}
+
+/**
+ * Triggers for the calendar actions that live in the home top bar (the iOS
+ * toolbar's list.bullet / plus buttons). The buttons are rendered by
+ * HomeScaffold; the sheets they open stay here.
+ */
+class CalendarTopBarState {
+    var showAllEvents by mutableStateOf(false)
+    var newEventRequests by mutableStateOf(0)
+        private set
+
+    fun requestNewEvent() {
+        newEventRequests++
+    }
+}
+
+/**
  * Calendar screen, mirroring the iOS CalendarView: a month grid with per-day
  * event dots over a selected-day agenda that merges events (recurrence
  * expanded) with board-task deadlines. New/edit events via a full-screen editor.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CalendarScreen() {
+fun CalendarScreen(topBarState: CalendarTopBarState = remember { CalendarTopBarState() }) {
     val viewModel: CalendarViewModel = viewModel(factory = CalendarViewModel.Factory)
     val ui = viewModel.uiState
     val zone = ui.zone
@@ -91,79 +153,64 @@ fun CalendarScreen() {
     var detailOccurrence by remember { mutableStateOf<EventOccurrence?>(null) }
     var detailTask by remember { mutableStateOf<CalendarTaskDeadline?>(null) }
     var editorFor by remember { mutableStateOf<EditorState?>(null) }
-    var showAllEvents by remember { mutableStateOf(false) }
+    var deletingEvent by remember { mutableStateOf<CalendarEvent?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.loadIfNeeded()
         viewModel.listenForRealtimeSignals()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        ExpressivePullToRefreshBox(
-            isRefreshing = ui.isLoading,
-            onRefresh = viewModel::refresh,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            if (!ui.hasLoaded && ui.isLoading) {
-                LoadingIndicator("Loading calendar…")
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Column(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
-                        if (ui.error != null) {
-                            ErrorBanner(message = ui.error, onRetry = viewModel::refresh)
-                            Spacer(Modifier.height(16.dp))
-                        }
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                            TextButton(onClick = { showAllEvents = true }) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.List,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("All events")
-                            }
-                        }
-                        MonthCard(
-                            month = displayedMonth,
-                            selectedDate = selectedDate,
-                            today = today,
-                            zone = zone,
-                            events = ui.events,
-                            tasks = ui.tasks,
-                            onPrev = { displayedMonth = displayedMonth.minusMonths(1) },
-                            onNext = { displayedMonth = displayedMonth.plusMonths(1) },
-                            onToday = { displayedMonth = YearMonth.from(today); selectedDate = today },
-                            onSelect = { selectedDate = it },
-                        )
-                        Spacer(Modifier.height(20.dp))
-                        AgendaSection(
-                            date = selectedDate,
-                            zone = zone,
-                            events = ui.events,
-                            tasks = ui.tasks,
-                            onEventClick = { detailOccurrence = it },
-                            onTaskClick = { detailTask = it },
-                        )
-                        Spacer(Modifier.height(80.dp))
+    // New-event button in the home top bar: each request opens the editor.
+    LaunchedEffect(topBarState.newEventRequests) {
+        if (topBarState.newEventRequests > 0) {
+            editorFor = EditorState(event = null, date = selectedDate)
+        }
+    }
+
+    ExpressivePullToRefreshBox(
+        isRefreshing = ui.isLoading,
+        onRefresh = viewModel::refresh,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        if (!ui.hasLoaded && ui.isLoading) {
+            LoadingIndicator("Loading calendar…")
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth()) {
+                    if (ui.error != null) {
+                        ErrorBanner(message = ui.error, onRetry = viewModel::refresh)
+                        Spacer(Modifier.height(16.dp))
                     }
+                    MonthCard(
+                        month = displayedMonth,
+                        selectedDate = selectedDate,
+                        today = today,
+                        zone = zone,
+                        events = ui.events,
+                        tasks = ui.tasks,
+                        onPrev = { displayedMonth = displayedMonth.minusMonths(1) },
+                        onNext = { displayedMonth = displayedMonth.plusMonths(1) },
+                        onToday = { displayedMonth = YearMonth.from(today); selectedDate = today },
+                        onSelect = { selectedDate = it },
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    AgendaSection(
+                        date = selectedDate,
+                        zone = zone,
+                        events = ui.events,
+                        tasks = ui.tasks,
+                        onEventClick = { detailOccurrence = it },
+                        onTaskClick = { detailTask = it },
+                    )
+                    Spacer(Modifier.height(80.dp))
                 }
             }
-        }
-
-        FloatingActionButton(
-            onClick = { editorFor = EditorState(event = null, date = selectedDate) },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(20.dp),
-        ) {
-            Icon(Icons.Filled.Add, contentDescription = "New event")
         }
     }
 
@@ -177,8 +224,8 @@ fun CalendarScreen() {
                 detailOccurrence = null
             },
             onDelete = {
-                viewModel.delete(occurrence.event.id)
                 detailOccurrence = null
+                deletingEvent = occurrence.event
             },
             onDismiss = { detailOccurrence = null },
         )
@@ -198,19 +245,45 @@ fun CalendarScreen() {
         )
     }
 
-    if (showAllEvents) {
+    if (topBarState.showAllEvents) {
         AllEventsSheet(
             events = ui.events,
             zone = zone,
             onEventClick = {
-                showAllEvents = false
+                topBarState.showAllEvents = false
                 detailOccurrence = it
             },
             onNewEvent = {
-                showAllEvents = false
+                topBarState.showAllEvents = false
                 editorFor = EditorState(event = null, date = selectedDate)
             },
-            onDismiss = { showAllEvents = false },
+            onDismiss = { topBarState.showAllEvents = false },
+        )
+    }
+
+    // Delete confirmation, matching the iOS alert (recurring events warn about the series).
+    deletingEvent?.let { event ->
+        val repeating = event.frequency != EventRecurrenceFrequency.NONE
+        AlertDialog(
+            onDismissRequest = { deletingEvent = null },
+            title = { Text(if (repeating) "Delete repeating event?" else "Delete event?") },
+            text = {
+                Text(
+                    if (repeating) "This permanently removes the entire repeating series."
+                    else "This event will be permanently removed.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.delete(event.id)
+                    deletingEvent = null
+                }) {
+                    Text("Delete Event", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingEvent = null }) { Text("Cancel") }
+            },
         )
     }
 }
@@ -262,7 +335,7 @@ private fun MonthCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
@@ -358,141 +431,211 @@ private fun AgendaSection(
     onEventClick: (EventOccurrence) -> Unit,
     onTaskClick: (CalendarTaskDeadline) -> Unit,
 ) {
-    val occurrences = remember(date, zone, events) {
-        events.flatMap { it.occurrencesOverlapping(date, zone) }.sortedBy { it.startAt }
+    // iOS items(on:): events (recurrence expanded) + the day's task deadlines,
+    // all-day first, then by start time (tasks sort before timed events).
+    val items = remember(date, zone, events, tasks) {
+        val eventItems = events
+            .flatMap { it.occurrencesOverlapping(date, zone) }
+            .map(AgendaItem::Event)
+        val dayKey = date.toString()
+        val taskItems = tasks.filter { it.dueDay == dayKey }.map(AgendaItem::Task)
+        (eventItems + taskItems).sortedWith(compareBy({ !it.isAllDay }, { it.sortInstant }))
     }
-    val dayTasks = remember(date, tasks) {
-        tasks.filter { it.dueDay == date.toString() }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = date.format(agendaDayFormat),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (items.isNotEmpty()) {
+            Text(
+                text = "${items.size} items",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
-    Text(
-        text = date.format(agendaDayFormat),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
-    )
-    if (occurrences.isEmpty() && dayTasks.isEmpty()) {
+    Spacer(Modifier.height(10.dp))
+    if (items.isEmpty()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-                .padding(28.dp),
+                .padding(24.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "Nothing scheduled",
-                style = MaterialTheme.typography.bodyMedium,
+                text = "No events or due tasks",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     } else {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            occurrences.forEach { occurrence ->
-                EventRow(occurrence = occurrence, zone = zone, onClick = { onEventClick(occurrence) })
-            }
-            dayTasks.forEach { task ->
-                TaskRow(task = task, onClick = { onTaskClick(task) })
+            items.forEach { item ->
+                AgendaItemRow(
+                    item = item,
+                    zone = zone,
+                    onClick = {
+                        when (item) {
+                            is AgendaItem.Event -> onEventClick(item.occurrence)
+                            is AgendaItem.Task -> onTaskClick(item.task)
+                        }
+                    },
+                )
             }
         }
     }
 }
 
+/** A single agenda card, mirroring the iOS itemRow layout. */
 @Composable
-private fun EventRow(occurrence: EventOccurrence, zone: ZoneId, onClick: () -> Unit) {
-    val event = occurrence.event
-    val color = parseHexColor(event.eventColor.hex, MaterialTheme.colorScheme.primary)
-    Row(
+private fun AgendaItemRow(item: AgendaItem, zone: ZoneId, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Tint bar spanning the full content height (iOS RoundedRectangle width 4).
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .background(item.tint, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(if (item.isCompletedTask) 0.65f else 1f),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        imageVector = when (item) {
+                            is AgendaItem.Event -> Icons.Outlined.DateRange
+                            is AgendaItem.Task -> Icons.Outlined.CheckBox
+                        },
+                        contentDescription = null,
+                        tint = item.tint,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = item.title.ifEmpty { "Untitled" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (item is AgendaItem.Task && item.task.taskPriority != TaskPriority.NONE) {
+                        PriorityBadge(item.task.taskPriority)
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                MetaLine(item, zone)
+                if (item.itemDescription.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = item.itemDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/** Priority capsule shown next to a task title (iOS priorityBadge). */
+@Composable
+private fun PriorityBadge(priority: TaskPriority) {
+    val color = priority.calendarColor
+    Text(
+        text = priority.label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Medium,
+        color = color,
         modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
+            .background(color.copy(alpha = 0.15f), CircleShape)
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
+}
+
+/** Second line of an agenda card (iOS metaLine). */
+@Composable
+private fun MetaLine(item: AgendaItem, zone: ZoneId) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .height(38.dp)
-                .background(color, RoundedCornerShape(2.dp)),
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = event.title.ifEmpty { "Untitled event" },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = timeRangeText(occurrence, zone, event.allDay),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (event.location.isNotEmpty()) {
-                Text(
-                    text = event.location,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+        when (item) {
+            is AgendaItem.Event -> {
+                MetaLabel(
+                    Icons.Outlined.Schedule,
+                    timeRangeText(item.occurrence, zone, item.occurrence.event.allDay),
                 )
+                if (item.occurrence.event.location.isNotEmpty()) {
+                    MetaLabel(Icons.Outlined.Place, item.occurrence.event.location)
+                }
+            }
+            is AgendaItem.Task -> {
+                MetaLabel(Icons.Outlined.Layers, item.task.projectName)
+                if (item.task.completed) {
+                    MetaLabel(Icons.Outlined.CheckCircle, "Completed")
+                } else {
+                    MetaLabel(Icons.Outlined.Schedule, "Due")
+                }
             }
         }
     }
 }
 
+/** Small icon + caption pair used in agenda and list rows. */
 @Composable
-private fun TaskRow(task: CalendarTaskDeadline, onClick: () -> Unit) {
+internal fun MetaLabel(icon: ImageVector, text: String) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // Priority-colored bar, matching the day-cell task dots.
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .height(38.dp)
-                .background(task.taskPriority.color, RoundedCornerShape(2.dp)),
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(13.dp),
         )
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = task.title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (task.description.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = task.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = "${task.projectName} · Task deadline",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (task.completed) {
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = "Done",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -514,8 +657,7 @@ private fun monthCells(month: YearMonth): List<LocalDate?> {
 
 /**
  * One dot color per calendar item on [day], matching iOS: events use their own
- * color, task deadlines use their priority color (so high/urgent show orange/red,
- * medium shows blue, etc. — not a flat gray).
+ * color, task deadlines use their calendar priority color.
  */
 private fun dayItemColors(
     day: LocalDate,
@@ -529,7 +671,7 @@ private fun dayItemColors(
         .map { parseHexColorOrDefault(it.event.eventColor.hex) }
     val taskColors = tasks
         .filter { it.dueDay == dayKey }
-        .map { it.taskPriority.color }
+        .map { it.taskPriority.calendarColor }
     return eventColors + taskColors
 }
 
@@ -543,26 +685,40 @@ private fun timeRangeText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boo
     return "$start – $end"
 }
 
-// System date + time pickers merged into an epoch-second selection.
-internal fun pickDateTime(
+// System date picker merged into an epoch-second selection, preserving the time of day.
+internal fun pickDate(
     context: Context,
     initialEpochSecond: Long,
     zone: ZoneId,
     onPicked: (Long) -> Unit,
 ) {
-    val zdt = java.time.Instant.ofEpochSecond(initialEpochSecond).atZone(zone)
+    val zdt = Instant.ofEpochSecond(initialEpochSecond).atZone(zone)
     DatePickerDialog(
         context,
         { _, year, month, day ->
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    val picked = java.time.ZonedDateTime.of(year, month + 1, day, hour, minute, 0, 0, zone)
-                    onPicked(picked.toEpochSecond())
-                },
-                zdt.hour, zdt.minute, true,
-            ).show()
+            val picked = java.time.ZonedDateTime.of(year, month + 1, day, zdt.hour, zdt.minute, 0, 0, zone)
+            onPicked(picked.toEpochSecond())
         },
         zdt.year, zdt.monthValue - 1, zdt.dayOfMonth,
+    ).show()
+}
+
+// System time picker merged into an epoch-second selection, preserving the date.
+internal fun pickTime(
+    context: Context,
+    initialEpochSecond: Long,
+    zone: ZoneId,
+    onPicked: (Long) -> Unit,
+) {
+    val zdt = Instant.ofEpochSecond(initialEpochSecond).atZone(zone)
+    TimePickerDialog(
+        context,
+        { _, hour, minute ->
+            val picked = java.time.ZonedDateTime.of(
+                zdt.year, zdt.monthValue, zdt.dayOfMonth, hour, minute, 0, 0, zone,
+            )
+            onPicked(picked.toEpochSecond())
+        },
+        zdt.hour, zdt.minute, true,
     ).show()
 }

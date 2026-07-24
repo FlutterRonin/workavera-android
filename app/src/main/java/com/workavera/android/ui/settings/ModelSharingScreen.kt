@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -23,8 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -32,10 +33,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -60,6 +61,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.workavera.android.data.model.LlmModel
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.SearchTextField
 
 private const val MAX_RECIPIENTS = 100
 
@@ -126,36 +128,65 @@ fun ModelSharingScreen(onDismiss: () -> Unit) {
                                 item { ErrorBanner(message = ui.error, onRetry = viewModel::refresh) }
                             }
                             item {
-                                Text(
-                                    text = "Recipients get a notification and may accept or reject. Accepting " +
-                                        "creates an independent copy; the API key is never displayed.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                // iOS person.2 info label in its own section.
+                                FormCard {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.Group,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(
+                                            text = "Recipients get a notification and may accept or reject it. " +
+                                                "Accepting creates an independent copy; the API key is never displayed.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                            item { FormSectionTitle("Model") }
+                            item {
+                                FormCard {
+                                    ModelPickerRow(
+                                        models = ui.shareableModels,
+                                        selected = selectedModel,
+                                        expanded = modelExpanded,
+                                        onExpandedChange = { modelExpanded = it },
+                                        onSelect = { selectedModelId = it },
+                                    )
+                                    if (selectedModel != null) {
+                                        HorizontalDivider(
+                                            thickness = 0.5.dp,
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                        )
+                                        ModelInfoRow("Protocol", selectedModel.protocol.label)
+                                        HorizontalDivider(
+                                            thickness = 0.5.dp,
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                        )
+                                        ModelInfoRow("Base URL", selectedModel.baseUrl, middleEllipsis = true)
+                                    }
+                                }
                             }
                             item {
-                                ModelPicker(
-                                    models = ui.shareableModels,
-                                    selected = selectedModel,
-                                    expanded = modelExpanded,
-                                    onExpandedChange = { modelExpanded = it },
-                                    onSelect = { selectedModelId = it },
-                                )
-                            }
-                            item {
-                                OutlinedTextField(
+                                SearchTextField(
                                     value = query,
                                     onValueChange = { query = it },
-                                    placeholder = { Text("Search users") },
-                                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    placeholder = "Search users",
                                 )
                             }
                             item {
                                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "RECIPIENTS",
+                                        text = "Recipients",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.weight(1f),
@@ -220,6 +251,12 @@ fun ModelSharingScreen(onDismiss: () -> Unit) {
                                 }
                             }
                             item {
+                                FormFooter(
+                                    "You can invite up to 100 users at once. " +
+                                        "Pending invitations are updated instead of duplicated.",
+                                )
+                            }
+                            item {
                                 Spacer(Modifier.height(4.dp))
                                 Button(
                                     onClick = {
@@ -271,7 +308,7 @@ fun ModelSharingScreen(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ModelPicker(
+private fun ModelPickerRow(
     models: List<LlmModel>,
     selected: LlmModel?,
     expanded: Boolean,
@@ -279,19 +316,33 @@ private fun ModelPicker(
     onSelect: (String) -> Unit,
 ) {
     Box {
-        OutlinedTextField(
-            value = selected?.let { "${it.name} · ${it.modelId}" } ?: "",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Configuration") },
-            trailingIcon = { Icon(Icons.Outlined.UnfoldMore, contentDescription = null) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Box(
+        Row(
             modifier = Modifier
-                .matchParentSize()
-                .clickable { onExpandedChange(true) },
-        )
+                .fillMaxWidth()
+                .clickable { onExpandedChange(true) }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Configuration",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = selected?.let { "${it.name} · ${it.modelId}" } ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
             models.forEach { model ->
                 DropdownMenuItem(
@@ -303,6 +354,31 @@ private fun ModelPicker(
                 )
             }
         }
+    }
+}
+
+/** Label + value row inside the Model card (iOS LabeledContent). */
+@Composable
+private fun ModelInfoRow(label: String, value: String, middleEllipsis: Boolean = false) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = if (middleEllipsis) TextOverflow.MiddleEllipsis else TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
     }
 }
 

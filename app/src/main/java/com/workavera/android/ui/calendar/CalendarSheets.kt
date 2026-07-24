@@ -6,14 +6,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,30 +27,45 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,8 +73,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -66,15 +88,21 @@ import com.workavera.android.data.model.EventColor
 import com.workavera.android.data.model.EventOccurrence
 import com.workavera.android.data.model.EventRecurrenceFrequency
 import com.workavera.android.data.model.EventReminder
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormSectionTitle
+import com.workavera.android.ui.settings.FormTextField
 import com.workavera.android.ui.theme.parseHexColor
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val detailDateFormat = DateTimeFormatter.ofPattern("EEE, MMM d, yyyy", Locale.getDefault())
 private val detailTimeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
+private val mediumDateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
 
+/** Event detail, mirroring the iOS EventDetailSheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EventDetailSheet(
@@ -95,90 +123,225 @@ internal fun EventDetailSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
         ) {
+            // Toolbar row (iOS topBarTrailing): spinner + edit/delete grouped in a
+            // capsule, so the title below gets the full width.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isMutating) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Row(
+                    modifier = Modifier.background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        CircleShape,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onEdit, enabled = !isMutating) {
+                        Icon(
+                            Icons.Outlined.Edit,
+                            contentDescription = "Edit event",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    IconButton(onClick = onDelete, enabled = !isMutating) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Delete event",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(12.dp).background(color, CircleShape))
-                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(color.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.DateRange,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
                 Text(
                     text = event.title.ifEmpty { "Untitled event" },
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
+                    fontWeight = FontWeight.Bold,
                 )
-                if (isMutating) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            }
-            Spacer(Modifier.height(16.dp))
-            DetailLine("When", whenText(occurrence, zone, event.allDay))
-            if (event.location.isNotEmpty()) DetailLine("Where", event.location)
-            if (event.frequency != EventRecurrenceFrequency.NONE) {
-                DetailLine("Repeats", recurrenceText(event))
-            }
-            if (event.reminder != EventReminder.NONE) DetailLine("Reminder", event.reminder.label)
-            if (event.description.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("Description", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(4.dp))
-                Text(event.description, style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onEdit, enabled = !isMutating) {
-                    Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Edit")
+            DetailCard {
+                DetailRow(Icons.Outlined.Schedule, "Time", timeText(occurrence, zone, event.allDay))
+                DetailDivider()
+                DetailRow(
+                    Icons.Outlined.DateRange,
+                    "Date",
+                    occurrence.startAt.atZone(zone).format(mediumDateFormat),
+                )
+                if (event.location.isNotEmpty()) {
+                    DetailDivider()
+                    DetailRow(Icons.Outlined.Place, "Location", event.location)
                 }
-                OutlinedButton(onClick = onDelete, enabled = !isMutating) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                if (event.frequency != EventRecurrenceFrequency.NONE) {
+                    DetailDivider()
+                    DetailRow(Icons.Outlined.Repeat, "Repeats", recurrenceText(event))
+                }
+                if (event.reminder != EventReminder.NONE) {
+                    DetailDivider()
+                    DetailRow(Icons.Outlined.Notifications, "Reminder", event.reminder.label)
                 }
             }
+            if (event.description.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                Text("Notes", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = event.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
 
+/** Task deadline detail, mirroring the iOS TaskDeadlineSheet. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TaskDetailSheet(task: CalendarTaskDeadline, onDismiss: () -> Unit) {
+    val color = task.taskPriority.calendarColor
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
         ) {
-            Text(task.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(16.dp))
-            DetailLine("Project", task.projectName)
-            DetailLine("Due", task.dueDay)
-            DetailLine("Priority", task.taskPriority.label)
-            DetailLine("Status", if (task.completed) "Completed" else "Open")
-            if (task.description.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text(task.description, style = MaterialTheme.typography.bodyMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(color.copy(alpha = 0.15f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        if (task.completed) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
             }
+            Spacer(Modifier.height(20.dp))
+            DetailCard {
+                DetailRow(Icons.Outlined.Layers, "Project", task.projectName)
+                DetailDivider()
+                DetailRow(Icons.Outlined.Flag, "Priority", task.taskPriority.label)
+                DetailDivider()
+                DetailRow(Icons.Outlined.Schedule, "Due Date", dueDateText(task))
+                if (task.completed) {
+                    DetailDivider()
+                    DetailRow(Icons.Outlined.CheckCircle, "Status", "Completed")
+                }
+            }
+            if (task.description.isNotEmpty()) {
+                Spacer(Modifier.height(20.dp))
+                Text("Description", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = task.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
 
+/** Grouped card holding detail rows (iOS secondarySystemGroupedBackground card). */
 @Composable
-private fun DetailLine(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+private fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        content = content,
+    )
+}
+
+/** One icon + label + value line inside a DetailCard (iOS detailRow). */
+@Composable
+private fun DetailRow(icon: ImageVector, label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(12.dp))
         Text(
-            text = label,
+            text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(96.dp),
+            textAlign = TextAlign.End,
         )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
     }
 }
+
+@Composable
+private fun DetailDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 44.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+private fun timeText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boolean): String {
+    if (allDay) return "All day"
+    val start = occurrence.startAt.atZone(zone).format(detailTimeFormat)
+    val end = occurrence.endAt.atZone(zone).format(detailTimeFormat)
+    return "$start – $end"
+}
+
+private fun dueDateText(task: CalendarTaskDeadline): String =
+    runCatching { LocalDate.parse(task.dueDay).format(mediumDateFormat) }.getOrDefault(task.dueDay)
 
 /** Full-screen event create/edit editor. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun EventEditorDialog(
     event: CalendarEvent?,
-    initialDate: java.time.LocalDate,
+    initialDate: LocalDate,
     timezone: String,
     onSave: (String?, CalendarEventInput, (String?) -> Unit) -> Unit,
     onDismiss: () -> Unit,
@@ -195,7 +358,7 @@ internal fun EventEditorDialog(
     var endEpoch by remember { mutableLongStateOf(event?.endAt?.epochSecond ?: defaultEnd) }
     var color by remember { mutableStateOf(event?.eventColor ?: EventColor.BLUE) }
     var frequency by remember { mutableStateOf(event?.frequency ?: EventRecurrenceFrequency.NONE) }
-    var interval by remember { mutableStateOf((event?.interval ?: 1).toString()) }
+    var interval by remember { mutableIntStateOf(event?.interval ?: 1) }
     var reminder by remember { mutableStateOf(event?.reminder ?: EventReminder.NONE) }
     var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -203,18 +366,29 @@ internal fun EventEditorDialog(
 
     fun submit() {
         if (title.isBlank()) { error = "A title is required."; return }
-        if (endEpoch <= startEpoch) { error = "The end time must be after the start time."; return }
+        // iOS: all-day events span the whole selected day (midnight → midnight).
+        val start: Long
+        val end: Long
+        if (allDay) {
+            val day = Instant.ofEpochSecond(startEpoch).atZone(zone).toLocalDate()
+            start = day.atStartOfDay(zone).toEpochSecond()
+            end = day.plusDays(1).atStartOfDay(zone).toEpochSecond()
+        } else {
+            if (endEpoch <= startEpoch) { error = "The end time must be after the start time."; return }
+            start = startEpoch
+            end = endEpoch
+        }
         val input = CalendarEventInput(
             title = title.trim(),
             description = description.trim(),
-            startAt = Instant.ofEpochSecond(startEpoch),
-            endAt = Instant.ofEpochSecond(endEpoch),
+            startAt = Instant.ofEpochSecond(start),
+            endAt = Instant.ofEpochSecond(end),
             allDay = allDay,
             timezone = timezone,
             location = location.trim(),
             color = color,
             recurrenceFrequency = frequency,
-            recurrenceInterval = interval.toIntOrNull()?.coerceAtLeast(1) ?: 1,
+            recurrenceInterval = interval.coerceAtLeast(1),
             reminder = reminder,
         )
         isSaving = true
@@ -250,70 +424,129 @@ internal fun EventEditorDialog(
                         .padding(padding)
                         .verticalScroll(rememberScrollState())
                         .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
                 ) {
-                    OutlinedTextField(
-                        value = title,
-                        onValueChange = { if (it.length <= 240) title = it },
-                        label = { Text("Title") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("All day", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        Switch(checked = allDay, onCheckedChange = { allDay = it }, enabled = !isSaving)
-                    }
-                    DateTimeRow("Starts", startEpoch, zone, allDay, enabled = !isSaving) {
-                        pickDateTime(context, startEpoch, zone) { picked ->
-                            startEpoch = picked
-                            if (endEpoch <= startEpoch) endEpoch = startEpoch + 3600
+                    if (event != null && event.frequency != EventRecurrenceFrequency.NONE) {
+                        FormCard {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Repeat,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = WarningOrange,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = "Changes apply to the entire repeating series.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = WarningOrange,
+                                )
+                            }
                         }
                     }
-                    DateTimeRow("Ends", endEpoch, zone, allDay, enabled = !isSaving) {
-                        pickDateTime(context, endEpoch, zone) { endEpoch = it }
-                    }
-                    ColorPickerRow(selected = color, enabled = !isSaving, onSelect = { color = it })
-                    EnumDropdownRow(
-                        label = "Repeats",
-                        value = frequency.label,
-                        enabled = !isSaving,
-                        options = EventRecurrenceFrequency.entries.map { it to it.label },
-                        onSelect = { frequency = it },
-                    )
-                    if (frequency != EventRecurrenceFrequency.NONE) {
-                        OutlinedTextField(
-                            value = interval,
-                            onValueChange = { interval = it.filter { c -> c.isDigit() }.take(3) },
-                            label = { Text("Every N ${frequency.name.lowercase()} interval") },
-                            singleLine = true,
+
+                    EditorGroup("Event") {
+                        FormTextField(
+                            value = title,
+                            onValueChange = { if (it.length <= 240) title = it },
+                            placeholder = "Title",
                             enabled = !isSaving,
+                        )
+                        EditorDivider()
+                        EditorValueRow("Date", editorDateText(startEpoch, zone), enabled = !isSaving) {
+                            pickDate(context, startEpoch, zone) { picked ->
+                                val delta = picked - startEpoch
+                                startEpoch = picked
+                                endEpoch += delta
+                            }
+                        }
+                        EditorDivider()
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("All day", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            Switch(checked = allDay, onCheckedChange = { allDay = it }, enabled = !isSaving)
+                        }
+                        if (!allDay) {
+                            EditorDivider()
+                            EditorValueRow("Starts", editorTimeText(startEpoch, zone), enabled = !isSaving) {
+                                pickTime(context, startEpoch, zone) { picked ->
+                                    startEpoch = picked
+                                    if (endEpoch <= startEpoch) endEpoch = startEpoch + 3600
+                                }
+                            }
+                            EditorDivider()
+                            EditorValueRow("Ends", editorTimeText(endEpoch, zone), enabled = !isSaving) {
+                                pickTime(context, endEpoch, zone) { endEpoch = it }
+                            }
+                        }
+                    }
+
+                    EditorGroup("Schedule") {
+                        EditorDropdownRow(
+                            label = "Repeat",
+                            value = frequency.label,
+                            enabled = !isSaving,
+                            options = EventRecurrenceFrequency.entries.map { it to it.label },
+                            onSelect = { frequency = it },
+                        )
+                        if (frequency != EventRecurrenceFrequency.NONE) {
+                            EditorDivider()
+                            IntervalStepperRow(
+                                interval = interval,
+                                frequency = frequency,
+                                enabled = !isSaving,
+                                onChange = { interval = it },
+                            )
+                        }
+                        EditorDivider()
+                        EditorDropdownRow(
+                            label = "Reminder",
+                            value = reminder.label,
+                            enabled = !isSaving,
+                            options = EventReminder.entries.map { it to it.label },
+                            onSelect = { reminder = it },
+                        )
+                    }
+
+                    EditorGroup("Color") {
+                        ColorPickerRow(selected = color, enabled = !isSaving, onSelect = { color = it })
+                    }
+
+                    EditorGroup("Details") {
+                        FormTextField(
+                            value = location,
+                            onValueChange = { if (it.length <= 500) location = it },
+                            placeholder = "Location",
+                            enabled = !isSaving,
+                        )
+                        EditorDivider()
+                        TextField(
+                            value = description,
+                            onValueChange = { description = it },
+                            placeholder = { Text("Description") },
+                            minLines = 4,
+                            enabled = !isSaving,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            ),
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    EnumDropdownRow(
-                        label = "Reminder",
-                        value = reminder.label,
-                        enabled = !isSaving,
-                        options = EventReminder.entries.map { it to it.label },
-                        onSelect = { reminder = it },
-                    )
-                    OutlinedTextField(
-                        value = location,
-                        onValueChange = { if (it.length <= 500) location = it },
-                        label = { Text("Location") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = description,
-                        onValueChange = { description = it },
-                        label = { Text("Description") },
-                        minLines = 3,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+
                     if (error != null) {
                         Text(error!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
@@ -323,56 +556,41 @@ internal fun EventEditorDialog(
     }
 }
 
+/** iOS .orange, used for the repeating-series warning. */
+private val WarningOrange = Color(0xFFFF9500)
+
+/** One section of the event editor: a title above a grouped card (iOS Form Section). */
 @Composable
-private fun DateTimeRow(
-    label: String,
-    epochSecond: Long,
-    zone: ZoneId,
-    allDay: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    val zdt = Instant.ofEpochSecond(epochSecond).atZone(zone)
-    val text = if (allDay) zdt.format(detailDateFormat) else "${zdt.format(detailDateFormat)}  ${zdt.format(detailTimeFormat)}"
+private fun EditorGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        FormSectionTitle(title)
+        FormCard(content = content)
+    }
+}
+
+@Composable
+private fun EditorDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+}
+
+/** Tappable label + value row inside an editor card (opens a picker). */
+@Composable
+private fun EditorValueRow(label: String, value: String, enabled: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(64.dp))
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
+/** Label + value row opening a dropdown, inside an editor card (iOS Picker .menu). */
 @Composable
-private fun ColorPickerRow(selected: EventColor, enabled: Boolean, onSelect: (EventColor) -> Unit) {
-    Column {
-        Text("Color", style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            EventColor.entries.forEach { option ->
-                val c = parseHexColor(option.hex, MaterialTheme.colorScheme.primary)
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(c, CircleShape)
-                        .clickable(enabled = enabled) { onSelect(option) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (option == selected) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T> EnumDropdownRow(
+private fun <T> EditorDropdownRow(
     label: String,
     value: String,
     enabled: Boolean,
@@ -384,14 +602,19 @@ private fun <T> EnumDropdownRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
                 .clickable(enabled = enabled) { expanded = true }
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(80.dp))
-            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Icon(Icons.Outlined.UnfoldMore, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (item, itemLabel) ->
@@ -404,12 +627,76 @@ private fun <T> EnumDropdownRow(
     }
 }
 
-private fun whenText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boolean): String {
-    val start = occurrence.startAt.atZone(zone)
-    if (allDay) return start.format(detailDateFormat) + " · All day"
-    val end = occurrence.endAt.atZone(zone)
-    return "${start.format(detailDateFormat)}  ${start.format(detailTimeFormat)} – ${end.format(detailTimeFormat)}"
+/** iOS Stepper row: "Every N units" with - / + buttons. */
+@Composable
+private fun IntervalStepperRow(
+    interval: Int,
+    frequency: EventRecurrenceFrequency,
+    enabled: Boolean,
+    onChange: (Int) -> Unit,
+) {
+    val unit = when (frequency) {
+        EventRecurrenceFrequency.DAILY -> "day"
+        EventRecurrenceFrequency.WEEKLY -> "week"
+        EventRecurrenceFrequency.MONTHLY -> "month"
+        EventRecurrenceFrequency.YEARLY -> "year"
+        EventRecurrenceFrequency.NONE -> "time"
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Every $interval $unit${if (interval == 1) "" else "s"}",
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = { onChange(interval - 1) }, enabled = enabled && interval > 1) {
+            Icon(Icons.Outlined.Remove, contentDescription = "Decrease interval")
+        }
+        IconButton(onClick = { onChange(interval + 1) }, enabled = enabled && interval < 999) {
+            Icon(Icons.Filled.Add, contentDescription = "Increase interval")
+        }
+    }
 }
+
+/** Color circles inside the Color card (iOS ring around the selected circle). */
+@Composable
+private fun ColorPickerRow(selected: EventColor, enabled: Boolean, onSelect: (EventColor) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+    ) {
+        EventColor.entries.forEach { option ->
+            val c = parseHexColor(option.hex, MaterialTheme.colorScheme.primary)
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .then(
+                        if (option == selected) {
+                            Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable(enabled = enabled) { onSelect(option) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(modifier = Modifier.size(30.dp).background(c, CircleShape))
+            }
+        }
+    }
+}
+
+private fun editorDateText(epochSecond: Long, zone: ZoneId): String =
+    Instant.ofEpochSecond(epochSecond).atZone(zone).format(detailDateFormat)
+
+private fun editorTimeText(epochSecond: Long, zone: ZoneId): String =
+    Instant.ofEpochSecond(epochSecond).atZone(zone).format(detailTimeFormat)
 
 /** Full-screen list of every custom event (iOS AllEventsListSheet). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -450,6 +737,8 @@ internal fun AllEventsSheet(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = onNewEvent) { Text("New Event") }
                     }
                 } else {
                     LazyColumn(
@@ -476,54 +765,81 @@ internal fun AllEventsSheet(
     }
 }
 
+/** One row in the All Events list, mirroring the iOS EventRow. */
 @Composable
 private fun AllEventRow(event: CalendarEvent, zone: ZoneId, onClick: () -> Unit) {
     val color = parseHexColor(event.eventColor.hex, MaterialTheme.colorScheme.primary)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.Top,
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Box(modifier = Modifier.width(4.dp).height(38.dp).background(color, RoundedCornerShape(2.dp)))
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = event.title.ifEmpty { "Untitled event" },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(4.dp)
+                    .background(color, RoundedCornerShape(2.dp)),
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = allEventWhen(event, zone),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (event.location.isNotEmpty()) {
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = event.location,
-                    style = MaterialTheme.typography.labelSmall,
+                    text = event.title.ifEmpty { "Untitled event" },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = scheduleText(event, zone),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (event.location.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    MetaLabel(Icons.Outlined.Place, event.location)
+                }
+            }
+            if (event.frequency != EventRecurrenceFrequency.NONE) {
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    Icons.Outlined.Autorenew,
+                    contentDescription = "Repeats",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
     }
 }
 
-private fun allEventWhen(event: CalendarEvent, zone: ZoneId): String {
+/** iOS EventRow.scheduleText: "EEE, MMM d, yyyy · All day" or "… · start – end". */
+private fun scheduleText(event: CalendarEvent, zone: ZoneId): String {
     val start = event.startAt.atZone(zone)
-    val base = if (event.allDay) {
-        "${start.format(detailDateFormat)} · All day"
+    val date = start.format(detailDateFormat)
+    return if (event.allDay) {
+        "$date · All day"
     } else {
-        "${start.format(detailDateFormat)}  ${start.format(detailTimeFormat)}"
+        val end = event.endAt.atZone(zone)
+        "$date · ${start.format(detailTimeFormat)} – ${end.format(detailTimeFormat)}"
     }
-    return if (event.frequency != EventRecurrenceFrequency.NONE) "$base · ${recurrenceText(event)}" else base
 }
 
+/** iOS recurrenceText: the frequency label, or "Every N units" for intervals > 1. */
 private fun recurrenceText(event: CalendarEvent): String {
     val n = event.interval
+    if (n == 1) return event.frequency.label
     val unit = when (event.frequency) {
         EventRecurrenceFrequency.DAILY -> "day"
         EventRecurrenceFrequency.WEEKLY -> "week"
@@ -531,5 +847,5 @@ private fun recurrenceText(event: CalendarEvent): String {
         EventRecurrenceFrequency.YEARLY -> "year"
         EventRecurrenceFrequency.NONE -> "time"
     }
-    return if (n == 1) "Every $unit" else "Every $n ${unit}s"
+    return "Every $n ${unit}s"
 }

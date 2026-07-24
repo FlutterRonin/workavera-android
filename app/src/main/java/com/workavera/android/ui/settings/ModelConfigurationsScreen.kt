@@ -39,15 +39,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +59,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -178,7 +181,7 @@ private fun ModelList(
         }
         item {
             Text(
-                text = "AVAILABLE TO YOUR ACCOUNT",
+                text = "Available to Your Account",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp),
@@ -356,6 +359,43 @@ private fun EmptyModels(onAdd: () -> Unit) {
 
 private data class ModelEditorTarget(val model: LlmModel?)
 
+/** Borderless single-line field used inside a FormCard (iOS grouped Form row). */
+@Composable
+internal fun FormTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    enabled: Boolean,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    trailingIcon: (@Composable () -> Unit)? = null,
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        placeholder = { Text(placeholder) },
+        singleLine = true,
+        enabled = enabled,
+        keyboardOptions = keyboardOptions,
+        visualTransformation = visualTransformation,
+        trailingIcon = trailingIcon,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun FormFieldDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModelEditorDialog(
@@ -445,137 +485,197 @@ private fun ModelEditorDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (model?.isSharedCopy == true) {
-                        Text(
-                            text = "This is an independent copy shared by " +
-                                "${model.sharedFromName.ifEmpty { "another user" }}. It cannot be shared onward.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { if (it.length <= 120) name = it },
-                        label = { Text("Name") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = modelId,
-                        onValueChange = { if (it.length <= 255) modelId = it },
-                        label = { Text("Model ID") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = baseUrl,
-                        onValueChange = { if (it.length <= 2048) baseUrl = it },
-                        label = { Text("Base URL") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-
-                    // Protocol picker
-                    Box {
-                        OutlinedTextField(
-                            value = "${protocol.label} · ${protocol.details}",
-                            onValueChange = {},
-                            readOnly = true,
-                            enabled = !isSaving,
-                            label = { Text("Protocol") },
-                            trailingIcon = { Icon(Icons.Outlined.UnfoldMore, contentDescription = null) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .clickable(enabled = !isSaving) { protocolExpanded = true },
-                        )
-                        DropdownMenu(expanded = protocolExpanded, onDismissRequest = { protocolExpanded = false }) {
-                            LlmProtocol.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(option.label)
-                                            Text(
-                                                option.details,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        protocolExpanded = false
-                                        val known = LlmProtocol.defaultBaseUrls
-                                        if (baseUrl.trim().isEmpty() || baseUrl in known) {
-                                            baseUrl = option.defaultBaseUrl
-                                        }
-                                        protocol = option
-                                    },
-                                )
-                            }
-                        }
-                    }
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = {
-                            if (it.length <= 4096) apiKey = it
-                            if (it.isNotEmpty()) clearSavedKey = false
-                        },
-                        label = { Text("Optional API key") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { showApiKey = !showApiKey }) {
+                        FormCard {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
                                 Icon(
-                                    if (showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                    contentDescription = if (showApiKey) "Hide API key" else "Show API key",
+                                    Icons.Outlined.Group,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    text = "This is an independent copy shared by " +
+                                        "${model.sharedFromName.ifEmpty { "another user" }}. It cannot be shared onward.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    if (model?.hasApiKey == true) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Remove saved key", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            Switch(
-                                checked = clearSavedKey,
-                                onCheckedChange = { clearSavedKey = it; if (it) apiKey = "" },
-                                enabled = !isSaving,
-                            )
                         }
                     }
-                    Text(
-                        text = apiKeyFooter(model?.hasApiKey == true, clearSavedKey),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
 
-                    OutlinedTextField(
-                        value = maxOutput,
-                        onValueChange = { maxOutput = it },
-                        label = { Text("Max output tokens") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
+                    FormSectionTitle("Model")
+                    FormCard {
+                        FormTextField(
+                            value = name,
+                            onValueChange = { if (it.length <= 120) name = it },
+                            placeholder = "Name",
+                            enabled = !isSaving,
+                        )
+                        FormFieldDivider()
+                        FormTextField(
+                            value = modelId,
+                            onValueChange = { if (it.length <= 255) modelId = it },
+                            placeholder = "Model ID",
+                            enabled = !isSaving,
+                        )
+                        FormFieldDivider()
+                        FormTextField(
+                            value = baseUrl,
+                            onValueChange = { if (it.length <= 2048) baseUrl = it },
+                            placeholder = "Base URL",
+                            enabled = !isSaving,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                        )
+                    }
+
+                    FormSectionTitle("Protocol")
+                    FormCard {
+                        Box {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isSaving) { protocolExpanded = true }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Protocol",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    text = protocol.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    Icons.Outlined.UnfoldMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = protocolExpanded,
+                                onDismissRequest = { protocolExpanded = false },
+                            ) {
+                                LlmProtocol.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(option.label)
+                                                Text(
+                                                    option.details,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            protocolExpanded = false
+                                            val known = LlmProtocol.defaultBaseUrls
+                                            if (baseUrl.trim().isEmpty() || baseUrl in known) {
+                                                baseUrl = option.defaultBaseUrl
+                                            }
+                                            protocol = option
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    FormSectionTitle(
+                        "API Key",
+                        trailing = if (model?.hasApiKey == true && !clearSavedKey) {
+                            {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Outlined.Key,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "Configured",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        } else {
+                            null
+                        },
                     )
-                    OutlinedTextField(
-                        value = maxContext,
-                        onValueChange = { maxContext = it },
-                        label = { Text("Max context tokens") },
-                        singleLine = true,
-                        enabled = !isSaving,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "Examples: 16384, 256k, or 1m. Context is compacted as conversations approach the limit.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    FormCard {
+                        FormTextField(
+                            value = apiKey,
+                            onValueChange = {
+                                if (it.length <= 4096) apiKey = it
+                                if (it.isNotEmpty()) clearSavedKey = false
+                            },
+                            placeholder = "Optional API key",
+                            enabled = !isSaving,
+                            visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showApiKey = !showApiKey }) {
+                                    Icon(
+                                        if (showApiKey) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                        contentDescription = if (showApiKey) "Hide API key" else "Show API key",
+                                    )
+                                }
+                            },
+                        )
+                        if (model?.hasApiKey == true) {
+                            FormFieldDivider()
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Remove saved key",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Switch(
+                                    checked = clearSavedKey,
+                                    onCheckedChange = { clearSavedKey = it; if (it) apiKey = "" },
+                                    enabled = !isSaving,
+                                )
+                            }
+                        }
+                    }
+                    FormFooter(apiKeyFooter(model?.hasApiKey == true, clearSavedKey))
+
+                    FormSectionTitle("Token Limits")
+                    FormCard {
+                        FormTextField(
+                            value = maxOutput,
+                            onValueChange = { maxOutput = it },
+                            placeholder = "Max output tokens",
+                            enabled = !isSaving,
+                        )
+                        FormFieldDivider()
+                        FormTextField(
+                            value = maxContext,
+                            onValueChange = { maxContext = it },
+                            placeholder = "Max context tokens",
+                            enabled = !isSaving,
+                        )
+                    }
+                    FormFooter(
+                        "Examples: 16384, 256k, or 1m. Context is compacted when conversations " +
+                            "approach the configured limit.",
                     )
                     if (error != null) {
                         Text(error!!, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)

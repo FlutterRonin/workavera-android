@@ -18,6 +18,12 @@ import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardStateCategory
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.DashboardSummary
+import com.workavera.android.data.model.DocsPage
+import com.workavera.android.data.model.DocsViewFilter
+import com.workavera.android.data.model.DocumentFolder
+import com.workavera.android.data.model.DocumentProject
+import com.workavera.android.data.model.DocumentSummary
+import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.LlmModel
 import com.workavera.android.data.model.LlmModelInput
 import com.workavera.android.data.model.LlmShareTarget
@@ -31,6 +37,7 @@ import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.model.User
 import com.workavera.android.data.model.UserPreferences
 import com.workavera.android.data.model.UserStatus
+import com.workavera.android.data.model.WorkspaceDocument
 import com.workavera.android.data.model.parseServerDate
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -956,6 +963,218 @@ class PocketBaseApi(
         realtimeFrames(server, token, CALENDAR_REALTIME_TOPICS)
             .filter { frame -> CALENDAR_REALTIME_PREFIXES.any { frame.event.startsWith(it) } }
             .map { }
+
+    // ---- Docs (workspace documents, mirrors the iOS docs API) ----
+
+    @Serializable
+    private data class DocumentRecord(
+        val id: String,
+        val title: String = "Untitled",
+        val kind: String = "markdown",
+        val content: String = "",
+        val owner: String = "",
+        val project: String = "",
+        val folder: String = "",
+        val status: String = "draft",
+        val revision: Int = 1,
+        @SerialName("last_edited_by") val lastEditedBy: String = "",
+        val created: String = "",
+        val updated: String = "",
+    ) {
+        fun toSummary(pinned: Boolean) = DocumentSummary(
+            id = id, title = title, kind = kind, ownerId = owner,
+            projectId = project.ifEmpty { null }, folderId = folder.ifEmpty { null },
+            status = status, revision = revision, updated = updated, pinned = pinned,
+        )
+
+        fun toWorkspace(pinned: Boolean) = WorkspaceDocument(
+            id = id, title = title, kind = kind, content = content, ownerId = owner,
+            projectId = project.ifEmpty { null }, folderId = folder.ifEmpty { null },
+            status = status, revision = revision, lastEditedBy = lastEditedBy,
+            created = created, updated = updated, pinned = pinned,
+        )
+    }
+
+    @Serializable
+    private data class PinnedDocumentRecord(
+        val id: String,
+        val title: String = "Untitled",
+        val kind: String = "markdown",
+        val ownerId: String = "",
+        val projectId: String? = null,
+        val folderId: String? = null,
+        val status: String = "draft",
+        val revision: Int = 1,
+        val updated: String = "",
+    ) {
+        fun toSummary() = DocumentSummary(
+            id = id, title = title, kind = kind, ownerId = ownerId,
+            projectId = projectId, folderId = folderId, status = status,
+            revision = revision, updated = updated, pinned = true,
+        )
+    }
+
+    @Serializable
+    private data class DocumentFolderRecord(val id: String, val name: String = "")
+
+    @Serializable
+    private data class DocumentPinPayload(val pinned: Boolean)
+
+    /**
+     * Docs page load, matching the iOS getDocsPage: pinned ids + folders +
+     * projects concurrently with the (paged) documents list; the Pinned view
+     * is served entirely by /api/docs-pinned, Recent caps at 10 items.
+     */
+    suspend fun getDocsPage(
+        server: String,
+        token: String,
+        userId: String,
+        view: DocsViewFilter,
+        page: Int,
+        pageSize: Int,
+        query: String,
+    ): DocsPage = coroutineScope {
+        val normalizedQuery = query.trim()
+        val escapedQuery = filterLiteral(normalizedQuery)
+
+        val pinnedDeferred = async {
+            request<List<PinnedDocumentRecord>>(server, "api/docs-pinned", HttpMethod.Get) {
+                header(HttpHeaders.Authorization, token)
+                if (normalizedQuery.isNotEmpty()) parameter("query", normalizedQuery)
+            }
+        }
+        val foldersDeferred = async {
+            listAll<DocumentFolderRecord>(server, token, "doc_folders", "", "name")
+        }
+        val projectsDeferred = async {
+            listAll<BoardProjectPreferenceRecord>(
+                server, token, "board_project_preferences",
+                "user = \"${filterLiteral(userId)}\" && project.archived = false",
+                "sort_order,id", expand = "project",
+            )
+        }
+        val listDeferred = async {
+            if (view is DocsViewFilter.Pinned) {
+                null
+            } else {
+                val filters = mutableListOf(
+                    if (view is DocsViewFilter.Archived) "status = \"archived\"" else "status = \"draft\"",
+                )
+                if (escapedQuery.isNotEmpty()) {
+                    filters += "(title ~ \"$escapedQuery\" || content ~ \"$escapedQuery\")"
+                }
+                when (view) {
+                    DocsViewFilter.MyDocuments -> {
+                        filters += "project = \"\""
+                        filters += "folder = \"\""
+                    }
+                    is DocsViewFilter.Folder -> {
+                        filters += "project = \"\""
+                        filters += "folder = \"${filterLiteral(view.id)}\""
+                    }
+                    is DocsViewFilter.Project ->
+                        filters += "project = \"${filterLiteral(view.id)}\""
+                    else -> {}
+                }
+                val isRecent = view is DocsViewFilter.Recent
+                request<RecordListResponse<DocumentRecord>>(
+                    server, "api/collections/docs/records", HttpMethod.Get,
+                ) {
+                    header(HttpHeaders.Authorization, token)
+                    parameter("page", (if (isRecent) 1 else page).toString())
+                    parameter("perPage", (if (isRecent) 10 else pageSize).toString())
+                    parameter("sort", "-updated")
+                    parameter("filter", filters.joinToString(" && "))
+                    parameter(
+                        "fields",
+                        "id,title,kind,owner,project,folder,status,revision,last_edited_by,created,updated",
+                    )
+                }
+            }
+        }
+
+        val pinnedRecords = pinnedDeferred.await()
+        val pinnedIds = pinnedRecords.mapTo(HashSet()) { it.id }
+        val listResponse = listDeferred.await()
+
+        val documents: List<DocumentSummary>
+        val resolvedPage: Int
+        val totalPages: Int
+        val totalItems: Int
+        when {
+            view is DocsViewFilter.Pinned -> {
+                documents = pinnedRecords.map { it.toSummary() }
+                resolvedPage = 1
+                totalPages = 1
+                totalItems = documents.size
+            }
+            listResponse != null -> {
+                val isRecent = view is DocsViewFilter.Recent
+                documents = listResponse.items.map { it.toSummary(it.id in pinnedIds) }
+                resolvedPage = if (isRecent) 1 else listResponse.page
+                totalPages = if (isRecent) 1 else maxOf(1, listResponse.totalPages)
+                totalItems = if (isRecent) documents.size else listResponse.totalItems ?: documents.size
+            }
+            else -> {
+                documents = emptyList()
+                resolvedPage = 1
+                totalPages = 1
+                totalItems = 0
+            }
+        }
+
+        DocsPage(
+            documents = documents,
+            folders = foldersDeferred.await().map { DocumentFolder(it.id, it.name) },
+            projects = projectsDeferred.await().mapNotNull { preference ->
+                preference.expand?.project?.let { DocumentProject(it.id, it.name) }
+            },
+            page = resolvedPage,
+            totalPages = totalPages,
+            totalItems = totalItems,
+        )
+    }
+
+    suspend fun getDocument(server: String, token: String, id: String, pinned: Boolean): WorkspaceDocument =
+        request<DocumentRecord>(server, "api/collections/docs/records/$id", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }.toWorkspace(pinned)
+
+    suspend fun getDocumentVersions(server: String, token: String, id: String): List<DocumentVersion> =
+        request(server, "api/docs/$id/versions", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun getDocumentVersion(
+        server: String,
+        token: String,
+        id: String,
+        revision: Int,
+    ): DocumentVersion =
+        request(server, "api/docs/$id/versions/$revision", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun setDocumentPinned(server: String, token: String, id: String, pinned: Boolean) =
+        requestEmpty(server, "api/docs/$id/pin", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(DocumentPinPayload(pinned))
+        }
+
+    suspend fun setDocumentArchived(server: String, token: String, id: String, archived: Boolean) =
+        requestEmpty(server, "api/docs/$id/${if (archived) "archive" else "unarchive"}", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun deleteDocument(server: String, token: String, id: String) =
+        requestEmpty(server, "api/docs/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /** Escapes a value embedded in a double-quoted PocketBase filter literal. */
+    private fun filterLiteral(raw: String): String =
+        raw.replace("\\", "\\\\").replace("\"", "\\\"")
 
     // ---- Realtime subscriptions (PocketBase SSE, same mechanism as iOS realtimeEvents) ----
 

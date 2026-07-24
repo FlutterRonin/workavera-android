@@ -74,4 +74,10 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.svg)
+
+    // Compose-native markdown rendering for Docs (and Chat later): core + M3
+    // styling + Coil 3 image loading.
+    implementation(libs.markdown.renderer.android)
+    implementation(libs.markdown.renderer.m3)
+    implementation(libs.markdown.renderer.coil3)
 }

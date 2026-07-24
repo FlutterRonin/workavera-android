@@ -31,7 +31,6 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Work
@@ -43,12 +42,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +70,7 @@ import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.SavedChatMemory
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.SearchTextField
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -241,13 +243,10 @@ private fun MemoryList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item {
-            OutlinedTextField(
+            SearchTextField(
                 value = ui.query,
                 onValueChange = viewModel::setQuery,
-                placeholder = { Text("Search memories") },
-                leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                placeholder = "Search memories",
             )
         }
         if (ui.error != null) {
@@ -397,7 +396,7 @@ private fun MemoryRow(
                     Icons.Outlined.Delete,
                     contentDescription = "Delete memory",
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -517,54 +516,78 @@ private fun MemoryEditorDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(20.dp),
                 ) {
-                    Text(
-                        text = "CATEGORY",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Box {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                .clickable(enabled = !isSaving) { categoryExpanded = true }
-                                .padding(horizontal = 14.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(category.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Text(category.label, modifier = Modifier.weight(1f))
-                            Icon(Icons.Outlined.UnfoldMore, contentDescription = null, modifier = Modifier.size(18.dp))
-                        }
-                        DropdownMenu(
-                            expanded = categoryExpanded,
-                            onDismissRequest = { categoryExpanded = false },
-                        ) {
-                            MemoryCategory.entries.forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option.label) },
-                                    leadingIcon = {
-                                        Icon(option.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    },
-                                    onClick = {
-                                        categoryExpanded = false
-                                        category = option
-                                    },
+                    FormSectionTitle("Category")
+                    FormCard {
+                        Box {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = !isSaving) { categoryExpanded = true }
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    category.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    category.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Icon(
+                                    Icons.Outlined.UnfoldMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = categoryExpanded,
+                                onDismissRequest = { categoryExpanded = false },
+                            ) {
+                                MemoryCategory.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.label) },
+                                        leadingIcon = {
+                                            Icon(option.icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = {
+                                            categoryExpanded = false
+                                            category = option
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = content,
-                        onValueChange = { if (it.length <= 500) content = it },
-                        label = { Text("Memory") },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(20.dp))
+                    FormSectionTitle("Memory")
+                    FormCard {
+                        TextField(
+                            value = content,
+                            onValueChange = { if (it.length <= 500) content = it },
+                            enabled = !isSaving,
+                            minLines = 5,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 8.dp, end = 8.dp, top = 6.dp),
+                    ) {
                         Text(
                             text = "One concise, durable fact.",
                             style = MaterialTheme.typography.bodySmall,

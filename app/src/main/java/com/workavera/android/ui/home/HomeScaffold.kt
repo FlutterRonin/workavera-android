@@ -15,8 +15,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -39,6 +42,7 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,10 +61,13 @@ import com.workavera.android.ui.AppSection
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.board.BoardScreen
 import com.workavera.android.ui.calendar.CalendarScreen
+import com.workavera.android.ui.calendar.CalendarTopBarState
 import com.workavera.android.ui.components.AvatarView
+import com.workavera.android.ui.docs.DocsScreen
 import com.workavera.android.ui.notifications.NotificationViewModel
 import com.workavera.android.ui.notifications.NotificationsScreen
 import com.workavera.android.ui.profile.ProfileScreen
+import com.workavera.android.ui.profile.ProfileTopBarState
 import kotlinx.coroutines.launch
 
 /**
@@ -156,6 +163,10 @@ private fun HomeContent(
     val notificationViewModel: NotificationViewModel =
         viewModel(key = state.user.id, factory = NotificationViewModel.Factory)
     val unreadCount = notificationViewModel.uiState.unreadCount
+    // Calendar top-bar actions (iOS toolbar list.bullet / plus); the sheets they
+    // trigger are rendered inside CalendarScreen.
+    val calendarTopBar = remember { CalendarTopBarState() }
+    val profileTopBar = remember { ProfileTopBarState() }
     // App-wide realtime subscription: the LaunchedEffect follows the signed-in
     // state, so signing out (leaving composition) disconnects the SSE stream.
     LaunchedEffect(state.user.id) {
@@ -175,18 +186,34 @@ private fun HomeContent(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { onOpenSection(AppSection.NOTIFICATIONS) }) {
-                        BadgedBox(
-                            badge = {
-                                if (unreadCount > 0) {
-                                    Badge { Text("$unreadCount") }
-                                }
-                            },
-                        ) {
+                    if (currentSection == AppSection.CALENDAR) {
+                        IconButton(onClick = { calendarTopBar.showAllEvents = true }) {
                             Icon(
-                                Icons.Outlined.Notifications,
-                                contentDescription = "Notifications",
+                                Icons.AutoMirrored.Outlined.List,
+                                contentDescription = "All events",
                             )
+                        }
+                        IconButton(onClick = { calendarTopBar.requestNewEvent() }) {
+                            Icon(Icons.Filled.Add, contentDescription = "New event")
+                        }
+                    } else if (currentSection == AppSection.PROFILE) {
+                        IconButton(onClick = { profileTopBar.showEditProfile = true }) {
+                            Icon(Icons.Outlined.Edit, contentDescription = "Edit profile")
+                        }
+                    } else if (currentSection == AppSection.DASHBOARD) {
+                        IconButton(onClick = { onOpenSection(AppSection.NOTIFICATIONS) }) {
+                            BadgedBox(
+                                badge = {
+                                    if (unreadCount > 0) {
+                                        Badge { Text("$unreadCount") }
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Notifications,
+                                    contentDescription = "Notifications",
+                                )
+                            }
                         }
                     }
                 },
@@ -204,11 +231,12 @@ private fun HomeContent(
                 composable(section.route) {
                     when (section) {
                         AppSection.DASHBOARD -> DashboardScreen(state, viewModel, onOpenSection)
-                        AppSection.PROFILE -> ProfileScreen(state, viewModel)
+                        AppSection.PROFILE -> ProfileScreen(state, viewModel, profileTopBar)
                         AppSection.SETTINGS -> SettingsScreen(state, viewModel)
                         AppSection.NOTIFICATIONS -> NotificationsScreen(notificationViewModel)
                         AppSection.BOARD -> BoardScreen(state)
-                        AppSection.CALENDAR -> CalendarScreen()
+                        AppSection.CALENDAR -> CalendarScreen(calendarTopBar)
+                        AppSection.DOCS -> DocsScreen()
                         else -> PlaceholderScreen(section)
                     }
                 }
