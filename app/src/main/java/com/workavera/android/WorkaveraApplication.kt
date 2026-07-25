@@ -8,15 +8,19 @@ import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
+import com.workavera.android.data.AiConsentRepository
 import com.workavera.android.data.ApiKeysRepository
 import com.workavera.android.data.AuthRepository
 import com.workavera.android.data.BoardRepository
 import com.workavera.android.data.CalendarRepository
+import com.workavera.android.data.ChatRepository
+import com.workavera.android.data.ContactsRepository
 import com.workavera.android.data.DashboardRepository
 import com.workavera.android.data.DocsRepository
 import com.workavera.android.data.LlmModelsRepository
 import com.workavera.android.data.NotificationRepository
 import com.workavera.android.data.PreferencesRepository
+import com.workavera.android.data.ReadingRepository
 import com.workavera.android.data.ResponseCache
 import com.workavera.android.data.SavedMemoriesRepository
 import com.workavera.android.data.SettingsRepository
@@ -58,7 +62,11 @@ class AppContainer(context: Context) {
     val boardRepository = BoardRepository(api, authRepository, responseCache)
     val llmModelsRepository = LlmModelsRepository(api, authRepository, responseCache)
     val calendarRepository = CalendarRepository(api, authRepository, responseCache)
+    val chatRepository = ChatRepository(api, authRepository, responseCache)
     val docsRepository = DocsRepository(api, authRepository, responseCache)
+    val readingRepository = ReadingRepository(api, authRepository, responseCache)
+    val contactsRepository = ContactsRepository(api, authRepository, responseCache)
+    val aiConsentRepository = AiConsentRepository(context)
 }
 
 class WorkaveraApplication : Application(), SingletonImageLoader.Factory {

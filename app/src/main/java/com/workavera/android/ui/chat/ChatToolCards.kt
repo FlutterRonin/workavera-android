@@ -1,0 +1,267 @@
+package com.workavera.android.ui.chat
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.workavera.android.data.model.ChatMessagePart
+import com.workavera.android.data.model.ChatMessageStatus
+import com.workavera.android.data.model.decodingEmbeddedJson
+import com.workavera.android.data.model.prettyPrintedJson
+import com.workavera.android.ui.theme.StatusOnline
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+
+/**
+ * Generic tool-call card with expandable Input/Output JSON and the approval
+ * flow (iOS ChatToolCard). Specialized cards (memory, docs, board, …) are
+ * routed before this one in the part dispatch.
+ */
+@Composable
+fun ChatToolCard(
+    part: ChatMessagePart,
+    approvalData: JsonElement?,
+    runActive: Boolean,
+    messageStatus: ChatMessageStatus?,
+    submittingApprovalIds: Set<String>,
+    onRespondApproval: (String, Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val approvalObject = approvalData as? JsonObject
+    val approvalId = approvalObject?.get("approvalId")?.jsonPrimitive?.contentOrNull
+    val awaitingApproval = part.state == "approval-requested" &&
+        runActive &&
+        messageStatus != ChatMessageStatus.ERROR &&
+        messageStatus != ChatMessageStatus.CANCELLED
+    val confirmationIsDestructive = approvalObject
+        ?.get("presentation")?.let { it as? JsonObject }
+        ?.get("confirmVariant")?.jsonPrimitive?.contentOrNull == "destructive"
+    val confirmationLabel = approvalObject
+        ?.get("presentation")?.let { it as? JsonObject }
+        ?.get("confirmLabel")?.jsonPrimitive?.contentOrNull ?: "Approve"
+
+    val isWorking = part.state in setOf("input-streaming", "input-available", "approval-responded")
+    val isError = part.state == "output-error"
+    val tint = when {
+        isError -> MaterialTheme.colorScheme.error
+        part.state == "output-available" -> StatusOnline
+        confirmationIsDestructive -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.primary
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable { expanded = !expanded }
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = when {
+                    awaitingApproval && confirmationIsDestructive -> Icons.Outlined.Warning
+                    awaitingApproval -> Icons.Outlined.VerifiedUser
+                    part.state == "output-available" -> Icons.Outlined.CheckCircle
+                    isError -> Icons.Outlined.Cancel
+                    else -> Icons.Outlined.Build
+                },
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = tint,
+            )
+            Spacer(Modifier.width(9.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    approvalObject?.get("title")?.jsonPrimitive?.contentOrNull
+                        ?: displayToolName(part.toolName),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stateLabel(part, awaitingApproval),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (isWorking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 1.5.dp,
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            Icon(
+                Icons.Outlined.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                modifier = Modifier
+                    .size(16.dp)
+                    .rotate(if (expanded) 180f else 0f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (expanded) {
+            Spacer(Modifier.height(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                approvalObject?.get("summary")?.jsonPrimitive?.contentOrNull?.let { summary ->
+                    Text(
+                        summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                part.input?.let { input ->
+                    JsonSection(title = "Input", value = input.decodingEmbeddedJson())
+                }
+                part.output?.let { output ->
+                    JsonSection(title = "Output", value = output.decodingEmbeddedJson())
+                }
+                part.errorText?.let { errorText ->
+                    Text(
+                        errorText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                if (awaitingApproval && approvalId != null) {
+                    val submitting = approvalId in submittingApprovalIds
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        OutlinedButton(
+                            onClick = { onRespondApproval(approvalId, false) },
+                            enabled = !submitting,
+                        ) {
+                            Text("Reject")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { onRespondApproval(approvalId, true) },
+                            enabled = !submitting,
+                            colors = if (confirmationIsDestructive) {
+                                ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                )
+                            } else {
+                                ButtonDefaults.buttonColors()
+                            },
+                        ) {
+                            Text(confirmationLabel)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+internal fun displayToolName(toolName: String?): String =
+    (toolName ?: "Workspace tool")
+        .replace("_", " ")
+        .split(" ")
+        .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+
+private fun stateLabel(part: ChatMessagePart, awaitingApproval: Boolean): String =
+    when (part.state) {
+        "input-streaming" -> "Preparing…"
+        "input-available" -> "Running…"
+        "approval-requested" -> if (awaitingApproval) "Awaiting approval" else "Approval expired"
+        "approval-responded" ->
+            if (part.approval?.approved == false) "Rejected" else "Applying…"
+        "output-available" -> "Completed"
+        "output-error" -> "Failed"
+        else -> part.state ?: "Tool call"
+    }
+
+/**
+ * Pretty-printed JSON well with a copy button; above [PREVIEW_LIMIT] chars
+ * the payload is truncated (the full value stays available via copy).
+ */
+@Composable
+internal fun JsonSection(title: String, value: JsonElement) {
+    val clipboard = LocalClipboardManager.current
+    val fullText = value.prettyPrintedJson()
+    val isTruncated = fullText.length > PREVIEW_LIMIT
+    val displayText = if (isTruncated) {
+        fullText.take(PREVIEW_LIMIT) + "\n… (${fullText.length - PREVIEW_LIMIT} more characters)"
+    } else {
+        fullText
+    }
+
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.weight(1f))
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = "Copy $title",
+                modifier = Modifier
+                    .size(14.dp)
+                    .clickable { clipboard.setText(AnnotatedString(fullText)) },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(
+            displayText,
+            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .horizontalScroll(rememberScrollState())
+                .padding(8.dp),
+        )
+    }
+}
+
+private const val PREVIEW_LIMIT = 600

@@ -18,11 +18,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Create
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -62,12 +66,20 @@ import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.board.BoardScreen
 import com.workavera.android.ui.calendar.CalendarScreen
 import com.workavera.android.ui.calendar.CalendarTopBarState
+import com.workavera.android.ui.chat.ChatScreen
+import com.workavera.android.ui.chat.ChatTopBarState
+import com.workavera.android.ui.chat.ChatViewModel
 import com.workavera.android.ui.components.AvatarView
+import com.workavera.android.ui.contacts.ContactsScreen
+import com.workavera.android.ui.contacts.ContactsViewModel
 import com.workavera.android.ui.docs.DocsScreen
 import com.workavera.android.ui.notifications.NotificationViewModel
 import com.workavera.android.ui.notifications.NotificationsScreen
 import com.workavera.android.ui.profile.ProfileScreen
 import com.workavera.android.ui.profile.ProfileTopBarState
+import com.workavera.android.ui.reading.ReadingScreen
+import com.workavera.android.ui.reading.ReadingTopBarState
+import com.workavera.android.ui.reading.ReadingViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -167,6 +179,22 @@ private fun HomeContent(
     // trigger are rendered inside CalendarScreen.
     val calendarTopBar = remember { CalendarTopBarState() }
     val profileTopBar = remember { ProfileTopBarState() }
+    // Chat top-bar actions (iOS toolbar archivebox / square.and.pencil); the
+    // archived sheet and create flow live in ChatScreen. Keyed by user id so
+    // switching accounts rebuilds the chat state.
+    val chatTopBar = remember { ChatTopBarState() }
+    val chatViewModel: ChatViewModel =
+        viewModel(key = "chat:${state.user.id}", factory = ChatViewModel.Factory)
+    // Reading top-bar actions (iOS toolbar checkmark.circle / plus); hoisted
+    // like the notification ViewModel so the top bar can reflect unreadCount
+    // and the mark-all-read spinner. Keyed by user id for per-account reset.
+    val readingTopBar = remember { ReadingTopBarState() }
+    val readingViewModel: ReadingViewModel =
+        viewModel(key = "reading:${state.user.id}", factory = ReadingViewModel.Factory)
+    // Contacts has no top-bar actions (iOS has none); hoisted and keyed by
+    // user id like Reading so switching accounts rebuilds its state.
+    val contactsViewModel: ContactsViewModel =
+        viewModel(key = "contacts:${state.user.id}", factory = ContactsViewModel.Factory)
     // App-wide realtime subscription: the LaunchedEffect follows the signed-in
     // state, so signing out (leaving composition) disconnects the SSE stream.
     LaunchedEffect(state.user.id) {
@@ -186,7 +214,30 @@ private fun HomeContent(
                     }
                 },
                 actions = {
-                    if (currentSection == AppSection.CALENDAR) {
+                    if (currentSection == AppSection.CHAT && !chatTopBar.detailOpen) {
+                        IconButton(onClick = { chatTopBar.showArchived = true }) {
+                            Icon(
+                                Icons.Outlined.Archive,
+                                contentDescription = "Archived conversations",
+                            )
+                        }
+                        IconButton(
+                            onClick = { chatTopBar.requestCreate() },
+                            enabled = !chatViewModel.uiState.isCreating,
+                        ) {
+                            if (chatViewModel.uiState.isCreating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Outlined.Create,
+                                    contentDescription = "New conversation",
+                                )
+                            }
+                        }
+                    } else if (currentSection == AppSection.CALENDAR) {
                         IconButton(onClick = { calendarTopBar.showAllEvents = true }) {
                             Icon(
                                 Icons.AutoMirrored.Outlined.List,
@@ -199,6 +250,28 @@ private fun HomeContent(
                     } else if (currentSection == AppSection.PROFILE) {
                         IconButton(onClick = { profileTopBar.showEditProfile = true }) {
                             Icon(Icons.Outlined.Edit, contentDescription = "Edit profile")
+                        }
+                    } else if (currentSection == AppSection.READING) {
+                        if (readingViewModel.uiState.unreadCount > 0) {
+                            IconButton(
+                                onClick = { readingViewModel.markAllRead() },
+                                enabled = !readingViewModel.uiState.isMarkingAllRead,
+                            ) {
+                                if (readingViewModel.uiState.isMarkingAllRead) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Outlined.CheckCircle,
+                                        contentDescription = "Mark all as read",
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = { readingTopBar.requestAdd() }) {
+                            Icon(Icons.Filled.Add, contentDescription = "Add reading item")
                         }
                     } else if (currentSection == AppSection.DASHBOARD) {
                         IconButton(onClick = { onOpenSection(AppSection.NOTIFICATIONS) }) {
@@ -231,12 +304,15 @@ private fun HomeContent(
                 composable(section.route) {
                     when (section) {
                         AppSection.DASHBOARD -> DashboardScreen(state, viewModel, onOpenSection)
+                        AppSection.CHAT -> ChatScreen(chatViewModel, chatTopBar)
                         AppSection.PROFILE -> ProfileScreen(state, viewModel, profileTopBar)
                         AppSection.SETTINGS -> SettingsScreen(state, viewModel)
                         AppSection.NOTIFICATIONS -> NotificationsScreen(notificationViewModel)
                         AppSection.BOARD -> BoardScreen(state)
                         AppSection.CALENDAR -> CalendarScreen(calendarTopBar)
                         AppSection.DOCS -> DocsScreen()
+                        AppSection.READING -> ReadingScreen(readingViewModel, readingTopBar)
+                        AppSection.CONTACTS -> ContactsScreen(contactsViewModel, state.user.id)
                         else -> PlaceholderScreen(section)
                     }
                 }

@@ -8,6 +8,15 @@ import com.workavera.android.data.model.CalendarEvent
 import com.workavera.android.data.model.CalendarEventInput
 import com.workavera.android.data.model.CalendarSnapshot
 import com.workavera.android.data.model.CalendarTaskDeadline
+import com.workavera.android.data.model.ChatConversation
+import com.workavera.android.data.model.ChatConversationUpdate
+import com.workavera.android.data.model.ChatConversationsPage
+import com.workavera.android.data.model.ChatMessage
+import com.workavera.android.data.model.ChatStreamChunk
+import com.workavera.android.data.model.ChatStreamRequest
+import com.workavera.android.data.model.Contact
+import com.workavera.android.data.model.ContactFavoriteRecord
+import com.workavera.android.data.model.ContactsSnapshot
 import com.workavera.android.data.model.CreatedApiKey
 import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.BoardLabel
@@ -31,6 +40,12 @@ import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.NotificationPage
 import com.workavera.android.data.model.NotificationRealtimeEvent
 import com.workavera.android.data.model.ProfileUpdate
+import com.workavera.android.data.model.ReadingItem
+import com.workavera.android.data.model.ReadingItemInput
+import com.workavera.android.data.model.ReadingListFilter
+import com.workavera.android.data.model.ReadingPage
+import com.workavera.android.data.model.ReadingStatus
+import com.workavera.android.data.model.ReadingSummaryResponse
 import com.workavera.android.data.model.RecordListResponse
 import com.workavera.android.data.model.SavedChatMemory
 import com.workavera.android.data.model.TaskPriority
@@ -50,6 +65,7 @@ import io.ktor.client.request.forms.formData
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.prepareGet
+import io.ktor.client.request.preparePost
 import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
@@ -61,6 +77,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readUTF8Line
 import java.time.Instant
 import java.time.ZoneId
@@ -107,9 +124,6 @@ class PocketBaseApi(
         val password: String,
         val passwordConfirm: String,
     )
-
-    @Serializable
-    private data class DeactivatePayload(val deactivated: Boolean)
 
     @Serializable
     private data class CreateApiKeyPayload(
@@ -246,18 +260,6 @@ class PocketBaseApi(
             ),
         )
     }
-
-    /**
-     * Soft-deletes the account by setting the `deactivated` flag. A hard delete
-     * would cascade to all of the user's data and orphan shared team data, so
-     * the server models account removal as deactivation.
-     */
-    suspend fun deactivateAccount(server: String, token: String, userId: String): User =
-        request(server, "api/collections/users/records/$userId", HttpMethod.Patch) {
-            header(HttpHeaders.Authorization, token)
-            contentType(ContentType.Application.Json)
-            setBody(DeactivatePayload(deactivated = true))
-        }
 
     /** Loads the single user_preferences record for the owner (theme + memory flags). */
     suspend fun getPreferences(server: String, token: String, userId: String): UserPreferences {
@@ -1172,9 +1174,380 @@ class PocketBaseApi(
             header(HttpHeaders.Authorization, token)
         }
 
+    // ---- Reading (reading list items, mirrors the iOS reading API) ----
+
+    @Serializable
+    private data class CreateReadingItemPayload(
+        val owner: String,
+        val url: String,
+        val title: String,
+        val description: String,
+        val tags: List<String>,
+        val status: String,
+    )
+
+    @Serializable
+    private data class UpdateReadingStatusPayload(val status: String)
+
+    @Serializable
+    private data class ReadingPinPayload(val pinned: Boolean)
+
+    @Serializable
+    private data class MarkAllReadingReadResponse(val updated: Int = 0)
+
+    /**
+     * Reading page load, matching the iOS getReadingPage: the paged items list
+     * and the global unread count are fetched concurrently; content_text is
+     * deliberately excluded from the list fields.
+     */
+    suspend fun getReadingPage(
+        server: String,
+        token: String,
+        filter: ReadingListFilter,
+        page: Int,
+        pageSize: Int,
+        query: String,
+    ): ReadingPage = coroutineScope {
+        val filters = when (filter) {
+            ReadingListFilter.ACTIVE -> mutableListOf("status != \"archived\"")
+            ReadingListFilter.UNREAD -> mutableListOf("status = \"unread\"")
+            ReadingListFilter.READ -> mutableListOf("status = \"read\"")
+            ReadingListFilter.PINNED -> mutableListOf("status != \"archived\"", "pinned = true")
+            ReadingListFilter.ARCHIVED -> mutableListOf("status = \"archived\"")
+        }
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isNotEmpty()) {
+            val escaped = filterLiteral(normalizedQuery)
+            filters += "(title ~ \"$escaped\" || url ~ \"$escaped\" || description ~ \"$escaped\" || " +
+                "summary ~ \"$escaped\" || tags ~ \"$escaped\" || key_points ~ \"$escaped\")"
+        }
+
+        val pageDeferred = async {
+            request<RecordListResponse<ReadingItem>>(
+                server, "api/collections/reading_items/records", HttpMethod.Get,
+            ) {
+                header(HttpHeaders.Authorization, token)
+                parameter("page", page.toString())
+                parameter("perPage", pageSize.toString())
+                parameter("sort", "-pinned,-updated")
+                parameter("filter", filters.joinToString(" && "))
+                parameter(
+                    "fields",
+                    "id,owner,project,url,title,description,tags,status,pinned,summary,key_points,summary_language,created,updated",
+                )
+            }
+        }
+        val unreadDeferred = async {
+            request<ListCountResponse>(
+                server, "api/collections/reading_items/records", HttpMethod.Get,
+            ) {
+                header(HttpHeaders.Authorization, token)
+                parameter("page", "1")
+                parameter("perPage", "1")
+                parameter("filter", "status = \"unread\"")
+                parameter("fields", "id")
+            }
+        }
+
+        val result = pageDeferred.await()
+        val unread = unreadDeferred.await()
+        ReadingPage(
+            items = result.items,
+            page = result.page,
+            totalPages = maxOf(1, result.totalPages),
+            totalItems = result.totalItems ?: result.items.size,
+            unreadCount = unread.totalItems,
+        )
+    }
+
+    suspend fun createReadingItem(
+        server: String,
+        token: String,
+        ownerId: String,
+        input: ReadingItemInput,
+    ): ReadingItem =
+        request(server, "api/collections/reading_items/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(
+                CreateReadingItemPayload(
+                    owner = ownerId,
+                    url = input.url,
+                    title = input.title,
+                    description = input.description,
+                    tags = input.tags,
+                    status = input.status.raw,
+                ),
+            )
+        }
+
+    suspend fun updateReadingStatus(
+        server: String,
+        token: String,
+        id: String,
+        status: ReadingStatus,
+    ): ReadingItem =
+        request(server, "api/collections/reading_items/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(UpdateReadingStatusPayload(status.raw))
+        }
+
+    /** Pin goes through a custom endpoint (server-side ordering), not a collection PATCH. */
+    suspend fun setReadingPinned(server: String, token: String, id: String, pinned: Boolean) =
+        requestEmpty(server, "api/reading/items/$id/pin", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(ReadingPinPayload(pinned))
+        }
+
+    suspend fun deleteReadingItem(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/reading_items/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun summarizeReadingItem(server: String, token: String, id: String): ReadingSummaryResponse =
+        request(server, "api/reading/items/$id/summarize", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun markAllReadingItemsRead(server: String, token: String): Int =
+        request<MarkAllReadingReadResponse>(server, "api/reading/items/read-all", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }.updated
+
+    // ---- Contacts (users directory + favorites, mirrors the iOS contacts API) ----
+
+    @Serializable
+    private data class CreateContactFavoritePayload(val owner: String, val contact: String)
+
+    /**
+     * Contacts snapshot, matching the iOS getContacts: the full users list and
+     * the owner's favorite records are fetched concurrently (both fully paged).
+     * There is no server-side search; filtering happens client-side.
+     */
+    suspend fun getContactsSnapshot(
+        server: String,
+        token: String,
+        ownerId: String,
+    ): ContactsSnapshot = coroutineScope {
+        val usersDeferred = async {
+            listAll<Contact>(server, token, "users", "", "name,id")
+        }
+        val favoritesDeferred = async {
+            listAll<ContactFavoriteRecord>(
+                server, token, "contact_favorites",
+                "owner = \"${filterLiteral(ownerId)}\"", "-created",
+            )
+        }
+        val favoriteRecordIds = favoritesDeferred.await().associate { it.contact to it.id }
+        ContactsSnapshot(
+            contacts = usersDeferred.await().map { user ->
+                user.copy(
+                    avatarUrl = fileUrl(server, user.collectionId, user.id, user.avatar),
+                    isFavorite = user.id in favoriteRecordIds,
+                )
+            },
+            favoriteRecordIds = favoriteRecordIds,
+        )
+    }
+
+    suspend fun createContactFavorite(
+        server: String,
+        token: String,
+        ownerId: String,
+        contactId: String,
+    ): ContactFavoriteRecord =
+        request(server, "api/collections/contact_favorites/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(CreateContactFavoritePayload(owner = ownerId, contact = contactId))
+        }
+
+    suspend fun deleteContactFavorite(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/contact_favorites/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
     /** Escapes a value embedded in a double-quoted PocketBase filter literal. */
     private fun filterLiteral(raw: String): String =
         raw.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    // ---- Chat (conversations + SSE streaming, mirrors the iOS PocketBaseClient chat API) ----
+
+    @Serializable
+    private data class CreateChatConversationPayload(val title: String)
+
+    @Serializable
+    private data class ChatApprovalPayload(val approved: Boolean)
+
+    /** Conversation list: pinned first, then by latest activity. page is 1-based. */
+    suspend fun getChatConversations(
+        server: String,
+        token: String,
+        page: Int,
+        pageSize: Int,
+        query: String = "",
+        archived: Boolean = false,
+    ): ChatConversationsPage {
+        var filter = "status = \"${if (archived) "archived" else "active"}\""
+        val trimmed = query.trim()
+        if (trimmed.isNotEmpty()) filter += " && title ~ \"${filterLiteral(trimmed)}\""
+        val response = request<RecordListResponse<ChatConversation>>(
+            server,
+            "api/collections/chat_conversations/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("page", page.toString())
+            parameter("perPage", pageSize.toString())
+            parameter("sort", if (archived) "-updated" else "-pinned,-last_message_at,-updated")
+            parameter("filter", filter)
+        }
+        return ChatConversationsPage(
+            items = response.items,
+            page = response.page,
+            totalPages = response.totalPages,
+            totalItems = response.totalItems ?: response.items.size,
+        )
+    }
+
+    suspend fun createChatConversation(
+        server: String,
+        token: String,
+        title: String,
+    ): ChatConversation =
+        request(server, "api/collections/chat_conversations/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(CreateChatConversationPayload(title))
+        }
+
+    suspend fun updateChatConversation(
+        server: String,
+        token: String,
+        id: String,
+        update: ChatConversationUpdate,
+    ): ChatConversation =
+        request(server, "api/collections/chat_conversations/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(update)
+        }
+
+    suspend fun deleteChatConversation(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/chat_conversations/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /** Persisted message history of one conversation (server is authoritative). */
+    suspend fun getChatMessages(
+        server: String,
+        token: String,
+        conversationId: String,
+    ): List<ChatMessage> =
+        request(server, "api/chat/conversations/$conversationId/messages", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /**
+     * Starts a chat run: POST /api/chat/stream, answered with a
+     * text/event-stream of ChatStreamChunk frames terminated by `data: [DONE]`.
+     */
+    fun chatStream(
+        server: String,
+        token: String,
+        body: ChatStreamRequest,
+    ): Flow<ChatStreamChunk> = flow {
+        val base = normalizeServerAddress(server)
+            ?: throw ApiException(0, "Enter your server address first.")
+        http.preparePost("$base/api/chat/stream") {
+            header(HttpHeaders.Authorization, token)
+            header(HttpHeaders.Accept, "text/event-stream")
+            header(HttpHeaders.CacheControl, "no-cache")
+            contentType(ContentType.Application.Json)
+            setBody(body)
+            timeout {
+                requestTimeoutMillis = CHAT_REQUEST_TIMEOUT_MS
+                socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+            }
+        }.execute { response ->
+            if (!response.status.isSuccess()) throw parseError(response)
+            readChatChunks(response.bodyAsChannel()) { emit(it) }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /** Re-attaches to an in-flight run (same chunk format as [chatStream]). */
+    fun resumeChatStream(
+        server: String,
+        token: String,
+        runId: String,
+    ): Flow<ChatStreamChunk> = flow {
+        val base = normalizeServerAddress(server)
+            ?: throw ApiException(0, "Enter your server address first.")
+        http.prepareGet("$base/api/chat/runs/$runId/stream") {
+            header(HttpHeaders.Authorization, token)
+            header(HttpHeaders.Accept, "text/event-stream")
+            header(HttpHeaders.CacheControl, "no-cache")
+            timeout {
+                requestTimeoutMillis = CHAT_REQUEST_TIMEOUT_MS
+                socketTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS
+            }
+        }.execute { response ->
+            if (!response.status.isSuccess()) throw parseError(response)
+            readChatChunks(response.bodyAsChannel()) { emit(it) }
+        }
+    }.flowOn(Dispatchers.IO)
+
+    suspend fun stopChatRun(server: String, token: String, runId: String) =
+        requestEmpty(server, "api/chat/runs/$runId/stop", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    suspend fun respondChatApproval(
+        server: String,
+        token: String,
+        runId: String,
+        approvalId: String,
+        approved: Boolean,
+    ) = requestEmpty(
+        server,
+        "api/chat/runs/$runId/approvals/$approvalId",
+        HttpMethod.Post,
+    ) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(ChatApprovalPayload(approved))
+    }
+
+    /**
+     * Reads SSE frames from a chat stream: blank line ends a frame, multiple
+     * data: lines are joined with \n, [DONE] ends the stream. Unlike realtime
+     * frames, event: lines are ignored (same as the iOS chatStream).
+     */
+    private suspend fun readChatChunks(
+        channel: ByteReadChannel,
+        emit: suspend (ChatStreamChunk) -> Unit,
+    ) {
+        val data = StringBuilder()
+        while (true) {
+            val line = channel.readUTF8Line(CHAT_SSE_LINE_LIMIT) ?: break
+            when {
+                line.isEmpty() -> {
+                    val payload = data.toString()
+                    data.setLength(0)
+                    if (payload.isEmpty()) continue
+                    if (payload == CHAT_STREAM_DONE) return
+                    emit(json.decodeFromString<ChatStreamChunk>(payload))
+                }
+                line.startsWith("data:") -> {
+                    if (data.isNotEmpty()) data.append('\n')
+                    data.append(line.substringAfter(':').trim())
+                }
+                // event:/comment/heartbeat lines are ignored.
+            }
+        }
+    }
 
     // ---- Realtime subscriptions (PocketBase SSE, same mechanism as iOS realtimeEvents) ----
 
@@ -1356,6 +1729,13 @@ class PocketBaseApi(
         private const val REALTIME_REQUEST_TIMEOUT_MS = 35L * 60 * 1000
         private const val REALTIME_CONNECT_EVENT = "PB_CONNECT"
         private const val SSE_LINE_LIMIT = 64 * 1024
+
+        /** Matches iOS: chat stream requests time out after 11 minutes. */
+        private const val CHAT_REQUEST_TIMEOUT_MS = 11L * 60 * 1000
+        private const val CHAT_STREAM_DONE = "[DONE]"
+
+        /** Chat SSE frames can carry large tool outputs; iOS caps frames at 5 MB. */
+        private const val CHAT_SSE_LINE_LIMIT = 6 * 1024 * 1024
 
         private val BOARD_REALTIME_TOPICS = listOf(
             "board_projects/*",

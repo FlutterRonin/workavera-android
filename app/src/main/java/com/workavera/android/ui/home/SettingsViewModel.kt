@@ -23,7 +23,6 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val error: String? = null,
-    val isDeletingAccount: Boolean = false,
 )
 
 /** Backs the Settings screen: appearance, chat-memory flags, and account deletion. */
@@ -84,24 +83,6 @@ class SettingsViewModel(
                 throw e
             } catch (e: Exception) {
                 uiState = uiState.copy(error = message(e, "Could not update your memory settings."))
-            }
-        }
-    }
-
-    /** Deletes the account; on success the session ends and this screen is torn down. */
-    fun deleteAccount() {
-        if (uiState.isDeletingAccount) return
-        uiState = uiState.copy(isDeletingAccount = true, error = null)
-        viewModelScope.launch {
-            try {
-                authRepository.deleteAccount()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                uiState = uiState.copy(
-                    isDeletingAccount = false,
-                    error = message(e, "Could not delete your account."),
-                )
             }
         }
     }

@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.BackHand
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
@@ -42,7 +41,6 @@ import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -94,7 +92,6 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
     val context = LocalContext.current
 
     var showSignOutConfirm by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
     var showApiKeys by remember { mutableStateOf(false) }
     var showSavedMemories by remember { mutableStateOf(false) }
     var showModelConfigs by remember { mutableStateOf(false) }
@@ -217,28 +214,7 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                     tint = MaterialTheme.colorScheme.error,
                     onClick = { showSignOutConfirm = true },
                 )
-                SettingsDivider()
-                ActionRow(
-                    icon = Icons.Outlined.Delete,
-                    title = "Delete Account",
-                    tint = MaterialTheme.colorScheme.error,
-                    enabled = !ui.isDeletingAccount,
-                    onClick = { showDeleteConfirm = true },
-                    trailing = {
-                        if (ui.isDeletingAccount) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        }
-                    },
-                )
             }
-            Spacer(Modifier.height(6.dp))
-            SettingsFooter(
-                "Deletes your account and signs you out on every device. You won't be able " +
-                    "to sign back in, and this can't be undone from the app.",
-            )
             Spacer(Modifier.height(20.dp))
 
             SettingsGroup(title = "About") {
@@ -292,19 +268,6 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
                 authViewModel.logout()
             },
             onDismiss = { showSignOutConfirm = false },
-        )
-    }
-    if (showDeleteConfirm) {
-        ConfirmDialog(
-            title = "Delete your account?",
-            message = "Your account will be deleted and you'll be signed out on every device. " +
-                "You won't be able to sign back in, and this can't be undone from the app.",
-            confirmLabel = "Delete Account",
-            onConfirm = {
-                showDeleteConfirm = false
-                viewModel.deleteAccount()
-            },
-            onDismiss = { showDeleteConfirm = false },
         )
     }
 }

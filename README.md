@@ -19,12 +19,21 @@ self-hosted [Workavera](https://github.com/xusenlin/workavera) server
   priority / due date with optimistic updates; realtime refresh via SSE
 - ✅ Notifications: paged list with unread badge, mark read / archive /
   delete, model-share accept & reject, realtime updates via SSE
+- ✅ Reading: filter chips + search, paged link cards (pin / read / archive /
+  delete), add-by-link sheet, detail sheet with AI fetch & summarize
+  (per user + model data-sharing consent), mark all as read
+- ✅ Contacts: live search + status filter chips, Favorites / Everyone
+  sections, presence dots, detail sheet with favorite/unfavorite
+  (`contact_favorites`), disk-cached with pull-to-refresh
+- ✅ Chat: conversation list (search / pin / rename / archive / delete,
+  archived sheet), SSE streaming replies with run resume & stop, reasoning
+  and tool-call cards with approvals, context gauge, markdown with
+  syntax-highlighted code blocks
 - ✅ Full menu: Dashboard / Reading / Contacts / Chat / Board / Docs /
   Calendar / Notifications / Settings / Profile, grouped like the Web sidebar
 - ✅ Tablet support: permanent sidebar at width ≥ 840dp (Material 3 Expanded
   breakpoint), drawer navigation on phones; dashboard grid and forms adapt to
   the window size
-- ⏳ Reading / Contacts / Chat / Docs / Calendar are placeholders
 
 ## Build & run
 
