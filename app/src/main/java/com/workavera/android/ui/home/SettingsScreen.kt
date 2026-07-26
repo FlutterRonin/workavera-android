@@ -1,7 +1,6 @@
 package com.workavera.android.ui.home
 
 import android.content.Intent
-import androidx.core.net.toUri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.BackHand
 import androidx.compose.material.icons.outlined.Brightness6
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
@@ -41,8 +39,6 @@ import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +57,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.workavera.android.BuildConfig
@@ -68,6 +65,8 @@ import com.workavera.android.data.AuthState
 import com.workavera.android.data.model.AppAppearance
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.ErrorBanner
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.settings.ApiKeysScreen
 import com.workavera.android.ui.settings.ModelConfigurationsScreen
 import com.workavera.android.ui.settings.ModelSharingScreen
@@ -306,20 +305,11 @@ private fun AppearanceRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             AppAppearance.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
-                    trailingIcon = {
-                        if (option == current) {
-                            Icon(
-                                Icons.Outlined.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    },
+                SelectMenuItem(
+                    label = option.label,
+                    selected = option == current,
                     onClick = {
                         expanded = false
                         onSelect(option)

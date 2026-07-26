@@ -1,12 +1,9 @@
 package com.workavera.android.ui.profile
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,41 +15,56 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.mr0xf00.easycrop.CropError
+import com.mr0xf00.easycrop.CropResult
+import com.mr0xf00.easycrop.crop
+import com.mr0xf00.easycrop.rememberImageCropper
 import com.workavera.android.data.AuthState
 import com.workavera.android.data.model.AvatarUpload
 import com.workavera.android.data.model.ProfileUpdate
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.components.StatusSelect
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormSectionTitle
+import com.workavera.android.ui.settings.FormTextField
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Edit profile: a full-screen dialog (Material 3 form convention), mirroring the iOS EditProfileSheet. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,14 +82,32 @@ fun EditProfileDialog(
     var bio by remember { mutableStateOf(user.bio) }
     var status by remember { mutableStateOf(user.userStatus) }
     var avatarBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var cropUri by remember { mutableStateOf<Uri?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imageCropper = rememberImageCropper()
 
     val photoPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
-        if (uri != null) cropUri = uri
+        if (uri != null) {
+            scope.launch {
+                when (val result = imageCropper.crop(uri, context)) {
+                    is CropResult.Success -> {
+                        avatarBytes = withContext(Dispatchers.Default) {
+                            AvatarImageProcessor.compressAvatar(
+                                result.bitmap.asAndroidBitmap(),
+                            )
+                        }
+                        errorMessage = null
+                    }
+                    is CropError -> errorMessage = "Could not load the photo."
+                    else -> Unit // Cancelled
+                }
+            }
+        }
     }
 
     Dialog(
@@ -179,70 +209,58 @@ fun EditProfileDialog(
                         }
                         Spacer(Modifier.height(16.dp))
 
-                        OutlinedTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = { Text("Name") },
-                            singleLine = true,
-                            enabled = !isSaving,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = phone,
-                            onValueChange = { phone = it },
-                            label = { Text("Phone") },
-                            singleLine = true,
-                            enabled = !isSaving,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = title,
-                            onValueChange = { title = it },
-                            label = { Text("Title") },
-                            singleLine = true,
-                            enabled = !isSaving,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = bio,
-                            onValueChange = { bio = it },
-                            label = { Text("Bio") },
-                            enabled = !isSaving,
-                            minLines = 3,
-                            maxLines = 8,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        FormSectionTitle("Details")
+                        FormCard {
+                            FormTextField(
+                                value = name,
+                                onValueChange = { name = it },
+                                placeholder = "Name",
+                                enabled = !isSaving,
+                            )
+                            ProfileFormDivider()
+                            FormTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                placeholder = "Phone",
+                                enabled = !isSaving,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            )
+                            ProfileFormDivider()
+                            FormTextField(
+                                value = title,
+                                onValueChange = { title = it },
+                                placeholder = "Title",
+                                enabled = !isSaving,
+                            )
+                            ProfileFormDivider()
+                            TextField(
+                                value = bio,
+                                onValueChange = { bio = it },
+                                placeholder = { Text("Bio") },
+                                enabled = !isSaving,
+                                minLines = 3,
+                                maxLines = 8,
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent,
+                                    disabledContainerColor = Color.Transparent,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent,
+                                    disabledIndicatorColor = Color.Transparent,
+                                ),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         Spacer(Modifier.height(16.dp))
 
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = "Status",
-                                style = MaterialTheme.typography.titleSmall,
+                        FormSectionTitle("Status")
+                        FormCard {
+                            StatusSelect(
+                                current = status,
+                                updating = false,
+                                enabled = !isSaving,
+                                onSelect = { status = it },
                             )
-                            Spacer(Modifier.height(8.dp))
-                            // Wrap the shared status picker in a thin-bordered box
-                            // to visually align with the OutlinedTextFields above.
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        shape = RoundedCornerShape(4.dp),
-                                    ),
-                            ) {
-                                StatusSelect(
-                                    current = status,
-                                    updating = false,
-                                    enabled = !isSaving,
-                                    onSelect = { status = it },
-                                )
-                            }
                         }
 
                         if (errorMessage != null) {
@@ -260,15 +278,12 @@ fun EditProfileDialog(
         }
     }
 
-    cropUri?.let { uri ->
-        AvatarCropDialog(
-            uri = uri,
-            onConfirm = { bytes ->
-                avatarBytes = bytes
-                cropUri = null
-                errorMessage = null
-            },
-            onDismiss = { cropUri = null },
-        )
+    imageCropper.cropState?.let { cropState ->
+        AvatarCropperDialog(state = cropState)
     }
+}
+
+@Composable
+private fun ProfileFormDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 }

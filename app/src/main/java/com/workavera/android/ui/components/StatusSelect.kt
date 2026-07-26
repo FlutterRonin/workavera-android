@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,10 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.workavera.android.data.model.UserStatus
 import com.workavera.android.ui.theme.color
@@ -90,46 +85,20 @@ fun StatusSelect(
             )
         }
 
-        DropdownMenu(
+        SelectMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            offset = DpOffset(0.dp, 4.dp),
             modifier = if (fieldWidth > 0.dp) Modifier.width(fieldWidth) else Modifier,
         ) {
             UserStatus.entries.forEach { status ->
-                val selected = status == current
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StatusDot(status)
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                text = status.label,
-                                style = MaterialTheme.typography.bodyLarge,
-                            )
-                        }
-                    },
-                    trailingIcon = {
-                        if (selected) {
-                            Icon(
-                                Icons.Outlined.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    },
+                SelectMenuItem(
+                    label = status.label,
+                    dotColor = status.color,
+                    selected = status == current,
                     onClick = {
                         expanded = false
                         onSelect(status)
                     },
-                    modifier = Modifier.background(
-                        if (selected) {
-                            MaterialTheme.colorScheme.surfaceVariant
-                        } else {
-                            Color.Transparent
-                        },
-                    ),
                 )
             }
         }

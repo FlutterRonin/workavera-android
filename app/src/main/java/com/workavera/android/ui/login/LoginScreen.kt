@@ -39,7 +39,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,6 +66,10 @@ import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.workavera.android.R
 import com.workavera.android.ui.AuthViewModel
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormFooter
+import com.workavera.android.ui.settings.FormSectionTitle
+import com.workavera.android.ui.settings.FormTextField
 
 // Matches iOS ServerConfiguration.defaultAddress: placeholder for the server
 // address field, and the fallback shown on the sign-in screen before a server
@@ -391,36 +394,27 @@ private fun ServerSettingsSheet(
                 TextButton(onClick = { onSave(address) }) { Text("Save") }
             }
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = "Server Address",
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = address,
-                onValueChange = { address = it },
-                placeholder = { Text(SERVER_ADDRESS_PLACEHOLDER) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Uri,
-                    imeAction = ImeAction.Done,
-                ),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(12.dp))
+            FormSectionTitle("Server Address")
+            FormCard {
+                FormTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    placeholder = SERVER_ADDRESS_PLACEHOLDER,
+                    enabled = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done,
+                    ),
+                )
+            }
             // Copy matches the iOS ServerSettingsSheet.
-            Text(
-                text = "Use HTTPS for any remote or production server. If Workavera " +
+            FormFooter(
+                "Use HTTPS for any remote or production server. If Workavera " +
                     "runs behind a reverse proxy, include its path prefix.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Workavera is open source — you can self-host the server " +
+            FormFooter(
+                "Workavera is open source — you can self-host the server " +
                     "from github.com/xusenlin/workavera.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(32.dp))
         }

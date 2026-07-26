@@ -32,9 +32,6 @@ import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +53,9 @@ import androidx.compose.ui.unit.dp
 import com.workavera.android.data.model.ReadingItem
 import com.workavera.android.data.model.ReadingListFilter
 import com.workavera.android.data.model.ReadingStatus
+import com.workavera.android.ui.components.ActionMenu
+import com.workavera.android.ui.components.ActionMenuDivider
+import com.workavera.android.ui.components.ActionMenuItem
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
@@ -379,59 +379,43 @@ private fun ReadingCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                ActionMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     if (item.readingStatus != ReadingStatus.ARCHIVED) {
-                        DropdownMenuItem(
-                            text = { Text(if (item.pinned) "Unpin" else "Pin") },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
+                        ActionMenuItem(
+                            label = if (item.pinned) "Unpin" else "Pin",
+                            icon = Icons.Outlined.PushPin,
                             onClick = { menuExpanded = false; onTogglePin() },
                         )
                         if (item.readingStatus == ReadingStatus.UNREAD) {
-                            DropdownMenuItem(
-                                text = { Text("Mark as Read") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Mark as Read",
+                                icon = Icons.Outlined.CheckCircle,
                                 onClick = { menuExpanded = false; onSetStatus(ReadingStatus.READ) },
                             )
                         } else {
-                            DropdownMenuItem(
-                                text = { Text("Mark as Unread") },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Mark as Unread",
+                                icon = Icons.Filled.Circle,
                                 onClick = { menuExpanded = false; onSetStatus(ReadingStatus.UNREAD) },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text("Archive") },
-                            leadingIcon = {
-                                Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
+                        ActionMenuItem(
+                            label = "Archive",
+                            icon = Icons.Outlined.Archive,
                             onClick = { menuExpanded = false; onSetStatus(ReadingStatus.ARCHIVED) },
                         )
                     } else {
-                        DropdownMenuItem(
-                            text = { Text("Restore as Unread") },
-                            leadingIcon = {
-                                Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
-                            },
+                        ActionMenuItem(
+                            label = "Restore as Unread",
+                            icon = Icons.AutoMirrored.Outlined.Undo,
                             onClick = { menuExpanded = false; onSetStatus(ReadingStatus.UNREAD) },
                         )
                     }
-                    HorizontalDivider()
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Outlined.Delete,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.error,
-                            )
-                        },
+                    ActionMenuDivider()
+                    ActionMenuItem(
+                        label = "Delete",
+                        icon = Icons.Outlined.Delete,
+                        destructive = true,
                         onClick = { menuExpanded = false; onDelete() },
                     )
                 }

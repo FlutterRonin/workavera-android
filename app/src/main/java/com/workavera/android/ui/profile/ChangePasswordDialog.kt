@@ -16,10 +16,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,6 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.workavera.android.ui.AuthViewModel
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormFooter
+import com.workavera.android.ui.settings.FormSectionTitle
+import com.workavera.android.ui.settings.FormTextField
 
 /** Change password: a full-screen dialog, mirroring the iOS ChangePasswordSheet. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -104,32 +108,30 @@ fun ChangePasswordDialog(
                             .widthIn(max = 560.dp)
                             .fillMaxWidth(),
                     ) {
-                        PasswordField(
-                            value = currentPassword,
-                            onValueChange = { currentPassword = it },
-                            label = "Current Password",
-                            enabled = !isSaving,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        PasswordField(
-                            value = newPassword,
-                            onValueChange = { newPassword = it },
-                            label = "New Password",
-                            enabled = !isSaving,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        PasswordField(
-                            value = confirmation,
-                            onValueChange = { confirmation = it },
-                            label = "Confirm New Password",
-                            enabled = !isSaving,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Use at least 8 characters.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        FormSectionTitle("Password")
+                        FormCard {
+                            PasswordField(
+                                value = currentPassword,
+                                onValueChange = { currentPassword = it },
+                                placeholder = "Current Password",
+                                enabled = !isSaving,
+                            )
+                            PasswordFormDivider()
+                            PasswordField(
+                                value = newPassword,
+                                onValueChange = { newPassword = it },
+                                placeholder = "New Password",
+                                enabled = !isSaving,
+                            )
+                            PasswordFormDivider()
+                            PasswordField(
+                                value = confirmation,
+                                onValueChange = { confirmation = it },
+                                placeholder = "Confirm New Password",
+                                enabled = !isSaving,
+                            )
+                        }
+                        FormFooter("Use at least 8 characters.")
 
                         if (errorMessage != null) {
                             Spacer(Modifier.height(12.dp))
@@ -150,15 +152,14 @@ fun ChangePasswordDialog(
 private fun PasswordField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: String,
+    placeholder: String,
     enabled: Boolean,
 ) {
     var visible by remember { mutableStateOf(false) }
-    OutlinedTextField(
+    FormTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
-        singleLine = true,
+        placeholder = placeholder,
         enabled = enabled,
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -170,6 +171,10 @@ private fun PasswordField(
                 )
             }
         },
-        modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun PasswordFormDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 }

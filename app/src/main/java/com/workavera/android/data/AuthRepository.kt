@@ -6,6 +6,7 @@ import com.workavera.android.data.model.User
 import com.workavera.android.data.model.UserStatus
 import com.workavera.android.data.network.ApiException
 import com.workavera.android.data.network.PocketBaseApi
+import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,13 @@ class AuthRepository(
 
     private val _state = MutableStateFlow<AuthState>(AuthState.Restoring)
     val state: StateFlow<AuthState> = _state.asStateFlow()
+
+    /**
+     * Cache-buster appended to the avatar URL (iOS avatarRevision): the
+     * avatar URL is stable across uploads, so it changes after every avatar
+     * upload and every session refresh to force a reload.
+     */
+    private var avatarRevision: String? = null
 
     /** Called at app launch: exchanges the saved token for a fresh session. */
     suspend fun restoreSession() {
@@ -99,6 +107,26 @@ class AuthRepository(
         val current = _state.value as? AuthState.LoggedIn ?: return
         val updated = api.updateProfile(current.server, current.token, current.user.id, profile, avatar)
         applyUpdatedUser(updated)
+        if (avatar != null) {
+            avatarRevision = UUID.randomUUID().toString()
+        }
+    }
+
+    /**
+     * Re-fetches the user record and rotates the session token (iOS
+     * refreshSession), e.g. for pull-to-refresh on the profile page.
+     */
+    suspend fun refreshSession() {
+        val current = _state.value as? AuthState.LoggedIn ?: return
+        val auth = api.authRefresh(current.server, current.token)
+        // Ignore a response belonging to a session that changed in flight.
+        val latest = _state.value as? AuthState.LoggedIn
+        if (latest == null || latest.user.id != current.user.id || latest.token != current.token) {
+            return
+        }
+        settings.setAuthToken(auth.token, current.server)
+        _state.value = AuthState.LoggedIn(auth.record, auth.token, current.server)
+        avatarRevision = UUID.randomUUID().toString()
     }
 
     /**
@@ -134,6 +162,10 @@ class AuthRepository(
     }
 
     /** Avatar URL of the signed-in user; null when no avatar is set. */
-    fun avatarUrl(state: AuthState.LoggedIn): String? =
-        api.fileUrl(state.server, state.user.collectionId, state.user.id, state.user.avatar)
+    fun avatarUrl(state: AuthState.LoggedIn): String? {
+        val url = api.fileUrl(state.server, state.user.collectionId, state.user.id, state.user.avatar)
+            ?: return null
+        val revision = avatarRevision ?: return url
+        return "$url?revision=$revision"
+    }
 }

@@ -1,12 +1,10 @@
 package com.workavera.android.ui.calendar
 
-import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,8 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ChevronLeft
-import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Place
@@ -42,7 +36,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,7 +51,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -70,6 +62,7 @@ import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.MonthCalendar
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -77,7 +70,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val monthHeaderFormat = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
 private val agendaDayFormat = DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.getDefault())
 private val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault())
 
@@ -194,9 +186,7 @@ fun CalendarScreen(topBarState: CalendarTopBarState = remember { CalendarTopBarS
                         zone = zone,
                         events = ui.events,
                         tasks = ui.tasks,
-                        onPrev = { displayedMonth = displayedMonth.minusMonths(1) },
-                        onNext = { displayedMonth = displayedMonth.plusMonths(1) },
-                        onToday = { displayedMonth = YearMonth.from(today); selectedDate = today },
+                        onMonthChange = { displayedMonth = it },
                         onSelect = { selectedDate = it },
                     )
                     Spacer(Modifier.height(20.dp))
@@ -298,9 +288,7 @@ private fun MonthCard(
     zone: ZoneId,
     events: List<CalendarEvent>,
     tasks: List<CalendarTaskDeadline>,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
-    onToday: () -> Unit,
+    onMonthChange: (YearMonth) -> Unit,
     onSelect: (LocalDate) -> Unit,
 ) {
     Card(
@@ -309,116 +297,15 @@ private fun MonthCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = month.atDay(1).format(monthHeaderFormat),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (month != YearMonth.from(today)) {
-                    TextButton(onClick = onToday) { Text("Today") }
-                }
-                IconButton(onClick = onPrev) {
-                    Icon(Icons.Outlined.ChevronLeft, contentDescription = "Previous month")
-                }
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Outlined.ChevronRight, contentDescription = "Next month")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                weekdayLabels().forEach { label ->
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(7),
-                modifier = Modifier.height(((monthCells(month).size / 7) * 48).dp),
-                userScrollEnabled = false,
-            ) {
-                items(monthCells(month)) { day ->
-                    if (day == null) {
-                        Box(modifier = Modifier.height(48.dp))
-                    } else {
-                        DayCell(
-                            day = day,
-                            isSelected = day == selectedDate,
-                            isToday = day == today,
-                            dotColors = dayItemColors(day, zone, events, tasks),
-                            onClick = { onSelect(day) },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DayCell(
-    day: LocalDate,
-    isSelected: Boolean,
-    isToday: Boolean,
-    dotColors: List<Color>,
-    onClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            // No ripple: selection is shown by the circle, matching the iOS plain
-            // button (avoids a square highlight filling the cell bounds).
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onClick,
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        // The selected/today highlight wraps only the day number; the dots below
-        // keep their own colors (matching the iOS day cell).
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .then(
-                    when {
-                        isSelected -> Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
-                        isToday -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        else -> Modifier
-                    },
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = day.dayOfMonth.toString(),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isToday || isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = when {
-                    isSelected -> MaterialTheme.colorScheme.onPrimary
-                    isToday -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
-            )
-        }
-        Spacer(Modifier.height(3.dp))
-        Row(
-            modifier = Modifier.height(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            dotColors.take(3).forEach { dot ->
-                Box(modifier = Modifier.size(5.dp).background(dot, CircleShape))
-            }
-        }
+        MonthCalendar(
+            month = month,
+            selectedDate = selectedDate,
+            today = today,
+            onMonthChange = onMonthChange,
+            onSelectDate = onSelect,
+            modifier = Modifier.padding(16.dp),
+            dayDots = { day -> dayItemColors(day, zone, events, tasks) },
+        )
     }
 }
 
@@ -641,20 +528,6 @@ internal fun MetaLabel(icon: ImageVector, text: String) {
 
 // ---- helpers ----
 
-private fun weekdayLabels(): List<String> =
-    listOf("S", "M", "T", "W", "T", "F", "S")
-
-/** Grid cells for a month: leading blanks (Sunday-first) then each day. */
-private fun monthCells(month: YearMonth): List<LocalDate?> {
-    val first = month.atDay(1)
-    val leading = first.dayOfWeek.value % 7 // Monday=1..Sunday=7 → Sunday-first offset
-    val cells = ArrayList<LocalDate?>(leading + month.lengthOfMonth())
-    repeat(leading) { cells.add(null) }
-    for (day in 1..month.lengthOfMonth()) cells.add(month.atDay(day))
-    while (cells.size % 7 != 0) cells.add(null)
-    return cells
-}
-
 /**
  * One dot color per calendar item on [day], matching iOS: events use their own
  * color, task deadlines use their calendar priority color.
@@ -683,24 +556,6 @@ private fun timeRangeText(occurrence: EventOccurrence, zone: ZoneId, allDay: Boo
     val start = occurrence.startAt.atZone(zone).format(timeFormat)
     val end = occurrence.endAt.atZone(zone).format(timeFormat)
     return "$start – $end"
-}
-
-// System date picker merged into an epoch-second selection, preserving the time of day.
-internal fun pickDate(
-    context: Context,
-    initialEpochSecond: Long,
-    zone: ZoneId,
-    onPicked: (Long) -> Unit,
-) {
-    val zdt = Instant.ofEpochSecond(initialEpochSecond).atZone(zone)
-    DatePickerDialog(
-        context,
-        { _, year, month, day ->
-            val picked = java.time.ZonedDateTime.of(year, month + 1, day, zdt.hour, zdt.minute, 0, 0, zone)
-            onPicked(picked.toEpochSecond())
-        },
-        zdt.year, zdt.monthValue - 1, zdt.dayOfMonth,
-    ).show()
 }
 
 // System time picker merged into an epoch-second selection, preserving the date.

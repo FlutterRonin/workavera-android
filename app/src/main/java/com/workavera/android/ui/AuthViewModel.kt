@@ -16,6 +16,7 @@ import com.workavera.android.data.model.AvatarUpload
 import com.workavera.android.data.model.ProfileUpdate
 import com.workavera.android.data.model.UserStatus
 import com.workavera.android.data.network.ApiException
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -50,6 +51,26 @@ class AuthViewModel(
 
     var profileUiState by mutableStateOf(ProfileUiState())
         private set
+
+    /** Pull-to-refresh on the profile page (iOS refreshSession); best-effort. */
+    var isRefreshingProfile by mutableStateOf(false)
+        private set
+
+    fun refreshProfile() {
+        if (isRefreshingProfile) return
+        viewModelScope.launch {
+            isRefreshingProfile = true
+            try {
+                repository.refreshSession()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Best-effort refresh; the visible session stays as is.
+            } finally {
+                isRefreshingProfile = false
+            }
+        }
+    }
 
     init {
         viewModelScope.launch { repository.restoreSession() }

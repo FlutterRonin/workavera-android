@@ -30,8 +30,6 @@ import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,6 +60,8 @@ import com.workavera.android.data.model.LlmModel
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.SearchTextField
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 
 private const val MAX_RECIPIENTS = 100
 
@@ -343,10 +343,11 @@ private fun ModelPickerRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
             models.forEach { model ->
-                DropdownMenuItem(
-                    text = { Text("${model.name} · ${model.modelId}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                SelectMenuItem(
+                    label = "${model.name} · ${model.modelId}",
+                    selected = model.id == selected?.id,
                     onClick = {
                         onExpandedChange(false)
                         onSelect(model.id)

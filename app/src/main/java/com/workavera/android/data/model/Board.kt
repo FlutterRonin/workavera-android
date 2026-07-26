@@ -1,6 +1,7 @@
 package com.workavera.android.data.model
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlinx.serialization.Serializable
@@ -63,8 +64,17 @@ data class BoardTask(
     val documentCount: Int,
     val rank: Double,
 ) {
+    /**
+     * The due day as stored: the server keeps board due dates day-granular
+     * (the web sends a bare `YYYY-MM-DD`, landing on UTC midnight), so the day
+     * is read back in UTC rather than the device zone.
+     */
+    val dueDay: LocalDate?
+        get() = dueDate?.atZone(ZoneOffset.UTC)?.toLocalDate()
+
+    /** Overdue once the due day itself has passed, matching the web board. */
     val isOverdue: Boolean
-        get() = dueDate?.isBefore(Instant.now()) == true
+        get() = dueDay?.isBefore(LocalDate.now()) == true
 }
 
 @Serializable

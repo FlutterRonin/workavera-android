@@ -40,8 +40,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +64,9 @@ import androidx.compose.ui.unit.dp
 import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.AppNotificationType
 import com.workavera.android.data.model.ModelShareStatus
+import com.workavera.android.ui.components.ActionMenu
+import com.workavera.android.ui.components.ActionMenuDivider
+import com.workavera.android.ui.components.ActionMenuItem
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
@@ -315,27 +316,20 @@ private fun NotificationMenu(onArchive: () -> Unit, onDelete: () -> Unit) {
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Archive") },
-                leadingIcon = {
-                    Icon(Icons.Outlined.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp))
-                },
+        ActionMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ActionMenuItem(
+                label = "Archive",
+                icon = Icons.Outlined.Inventory2,
                 onClick = {
                     expanded = false
                     onArchive()
                 },
             )
-            DropdownMenuItem(
-                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                },
+            ActionMenuDivider()
+            ActionMenuItem(
+                label = "Delete",
+                icon = Icons.Outlined.Delete,
+                destructive = true,
                 onClick = {
                     expanded = false
                     onDelete()

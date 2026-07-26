@@ -47,8 +47,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -88,6 +86,9 @@ import com.workavera.android.data.model.EventColor
 import com.workavera.android.data.model.EventOccurrence
 import com.workavera.android.data.model.EventRecurrenceFrequency
 import com.workavera.android.data.model.EventReminder
+import com.workavera.android.ui.components.DayPickerDialog
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.settings.FormCard
 import com.workavera.android.ui.settings.FormSectionTitle
 import com.workavera.android.ui.settings.FormTextField
@@ -123,8 +124,9 @@ internal fun EventDetailSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
         ) {
-            // Toolbar row (iOS topBarTrailing): spinner + edit/delete grouped in a
-            // capsule, so the title below gets the full width.
+            // Sheet actions (iOS sheet toolbar): bare icon buttons at the end,
+            // same as the reading detail sheet — no capsule, which got clipped
+            // against the drag handle.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
@@ -132,29 +134,20 @@ internal fun EventDetailSheet(
             ) {
                 if (isMutating) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
                 }
-                Row(
-                    modifier = Modifier.background(
-                        MaterialTheme.colorScheme.surfaceVariant,
-                        CircleShape,
-                    ),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onEdit, enabled = !isMutating) {
-                        Icon(
-                            Icons.Outlined.Edit,
-                            contentDescription = "Edit event",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    IconButton(onClick = onDelete, enabled = !isMutating) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Delete event",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
+                IconButton(onClick = onEdit, enabled = !isMutating) {
+                    Icon(
+                        Icons.Outlined.Edit,
+                        contentDescription = "Edit event",
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                IconButton(onClick = onDelete, enabled = !isMutating) {
+                    Icon(
+                        Icons.Outlined.Delete,
+                        contentDescription = "Delete event",
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -362,6 +355,7 @@ internal fun EventEditorDialog(
     var reminder by remember { mutableStateOf(event?.reminder ?: EventReminder.NONE) }
     var isSaving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     fun submit() {
@@ -459,11 +453,7 @@ internal fun EventEditorDialog(
                         )
                         EditorDivider()
                         EditorValueRow("Date", editorDateText(startEpoch, zone), enabled = !isSaving) {
-                            pickDate(context, startEpoch, zone) { picked ->
-                                val delta = picked - startEpoch
-                                startEpoch = picked
-                                endEpoch += delta
-                            }
+                            showDatePicker = true
                         }
                         EditorDivider()
                         Row(
@@ -554,6 +544,23 @@ internal fun EventEditorDialog(
             }
         }
     }
+
+    if (showDatePicker) {
+        val start = Instant.ofEpochSecond(startEpoch).atZone(zone)
+        DayPickerDialog(
+            title = "Date",
+            initialDate = start.toLocalDate(),
+            today = LocalDate.now(zone),
+            onDismiss = { showDatePicker = false },
+            onPicked = { day ->
+                // Keep the time of day and drag the end along, as the old
+                // system picker did.
+                val picked = day.atTime(start.toLocalTime()).atZone(zone).toEpochSecond()
+                endEpoch += picked - startEpoch
+                startEpoch = picked
+            },
+        )
+    }
 }
 
 /** iOS .orange, used for the repeating-series warning. */
@@ -616,10 +623,11 @@ private fun <T> EditorDropdownRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { (item, itemLabel) ->
-                DropdownMenuItem(
-                    text = { Text(itemLabel) },
+                SelectMenuItem(
+                    label = itemLabel,
+                    selected = itemLabel == value,
                     onClick = { expanded = false; onSelect(item) },
                 )
             }

@@ -27,17 +27,18 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -75,8 +76,13 @@ import com.workavera.android.data.model.LlmModel
 import com.workavera.android.data.model.LlmModelInput
 import com.workavera.android.data.model.LlmProtocol
 import com.workavera.android.data.model.LlmTokenFormat
+import com.workavera.android.ui.components.ActionMenu
+import com.workavera.android.ui.components.ActionMenuDivider
+import com.workavera.android.ui.components.ActionMenuItem
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.theme.StatusOnline
 
 /**
@@ -300,19 +306,24 @@ private fun ModelRow(
                 IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Outlined.MoreVert, contentDescription = "Model actions", modifier = Modifier.size(18.dp))
                 }
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                ActionMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                     if (!model.isDefault) {
-                        DropdownMenuItem(
-                            text = { Text("Set as Default") },
+                        ActionMenuItem(
+                            label = "Set as Default",
+                            icon = Icons.Outlined.StarOutline,
                             onClick = { menuExpanded = false; onSetDefault() },
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Edit") },
+                    ActionMenuItem(
+                        label = "Edit",
+                        icon = Icons.Outlined.Edit,
                         onClick = { menuExpanded = false; onEdit() },
                     )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    ActionMenuDivider()
+                    ActionMenuItem(
+                        label = "Delete",
+                        icon = Icons.Outlined.Delete,
+                        destructive = true,
                         onClick = { menuExpanded = false; onDelete() },
                     )
                 }
@@ -562,22 +573,15 @@ private fun ModelEditorDialog(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            DropdownMenu(
+                            SelectMenu(
                                 expanded = protocolExpanded,
                                 onDismissRequest = { protocolExpanded = false },
                             ) {
                                 LlmProtocol.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text(option.label)
-                                                Text(
-                                                    option.details,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        },
+                                    SelectMenuItem(
+                                        label = option.label,
+                                        supportingText = option.details,
+                                        selected = option == protocol,
                                         onClick = {
                                             protocolExpanded = false
                                             val known = LlmProtocol.defaultBaseUrls

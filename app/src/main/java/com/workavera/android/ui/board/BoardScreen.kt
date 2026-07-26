@@ -1,8 +1,5 @@
 package com.workavera.android.ui.board
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Flag
@@ -41,8 +39,6 @@ import androidx.compose.material.icons.outlined.ViewKanban
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,7 +58,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,17 +72,19 @@ import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.ui.components.AvatarView
+import com.workavera.android.ui.components.DayPickerDialog
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.PaginationBar
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.theme.color
 import com.workavera.android.ui.theme.parseHexColor
 import java.time.Instant
-import java.time.ZoneId
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(14.dp)
@@ -97,7 +94,7 @@ private val CardBorder: BorderStroke
 private val dueDateShortFormat =
     DateTimeFormatter.ofPattern("MMM d", Locale.getDefault())
 private val dueDateLongFormat =
-    DateTimeFormatter.ofPattern("MMM d, yyyy, HH:mm", Locale.getDefault())
+    DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
 
 /**
  * Board screen, laid out like the mobile form of the iOS BoardView: project
@@ -303,7 +300,7 @@ private fun TaskCard(task: BoardTask, isUpdating: Boolean, onClick: () -> Unit) 
                         )
                         Spacer(Modifier.width(12.dp))
                     }
-                    task.dueDate?.let { dueDate ->
+                    task.dueDay?.let { dueDay ->
                         val overdue = task.isOverdue
                         Icon(
                             Icons.Outlined.DateRange,
@@ -317,9 +314,7 @@ private fun TaskCard(task: BoardTask, isUpdating: Boolean, onClick: () -> Unit) 
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = dueDateShortFormat.format(
-                                dueDate.atZone(ZoneId.systemDefault()),
-                            ),
+                            text = dueDateShortFormat.format(dueDay),
                             style = MaterialTheme.typography.labelSmall,
                             color = if (overdue) {
                                 MaterialTheme.colorScheme.error
@@ -669,7 +664,7 @@ private fun TaskDetailSheet(
     onDueDateChange: (Instant?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val context = LocalContext.current
+    var showDueDatePicker by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -739,10 +734,7 @@ private fun TaskDetailSheet(
                     DueDateRow(
                         task = task,
                         enabled = !isUpdating,
-                        onPick = {
-                            pickDateTime(context, task.dueDate, onDueDateChange)
-                        },
-                        onClear = { onDueDateChange(null) },
+                        onPick = { showDueDatePicker = true },
                     )
                     if (task.documentCount > 0) {
                         DetailDivider()
@@ -764,6 +756,15 @@ private fun TaskDetailSheet(
             }
         }
     }
+
+    if (showDueDatePicker) {
+        DueDatePickerDialog(
+            current = task.dueDate,
+            onDismiss = { showDueDatePicker = false },
+            onPicked = onDueDateChange,
+            onClear = { onDueDateChange(null) },
+        )
+    }
 }
 
 @Composable
@@ -781,6 +782,10 @@ private fun DetailRow(
     title: String,
     value: String,
     valueColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    /** Color chip in front of the value (iOS keeps the state / priority / due color on this dot, not on the text). */
+    valueDot: Color? = null,
+    /** Closing affordance (iOS: up-down chevrons on the menus, a right chevron on due date). */
+    indicator: ImageVector? = null,
     onClick: (() -> Unit)? = null,
 ) {
     Row(
@@ -803,6 +808,14 @@ private fun DetailRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
         )
+        if (valueDot != null) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(valueDot, CircleShape),
+            )
+            Spacer(Modifier.width(6.dp))
+        }
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
@@ -810,6 +823,15 @@ private fun DetailRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        if (indicator != null) {
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                indicator,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
 
@@ -827,38 +849,21 @@ private fun StatusRow(
             icon = Icons.Outlined.SwapHoriz,
             title = "Status",
             value = current?.name ?: "—",
+            valueDot = current?.let {
+                parseHexColor(it.color, MaterialTheme.colorScheme.onSurfaceVariant)
+            },
+            indicator = Icons.Outlined.UnfoldMore,
             onClick = if (enabled) ({ expanded = true }) else null,
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             states.forEach { state ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .background(
-                                        parseHexColor(
-                                            state.color,
-                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                        ),
-                                        CircleShape,
-                                    ),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(state.name)
-                        }
-                    },
-                    trailingIcon = {
-                        if (state.id == task.stateId) {
-                            Icon(
-                                Icons.Outlined.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    },
+                SelectMenuItem(
+                    label = state.name,
+                    dotColor = parseHexColor(
+                        state.color,
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    selected = state.id == task.stateId,
                     onClick = {
                         expanded = false
                         onMove(state.id)
@@ -881,33 +886,16 @@ private fun PriorityRow(
             icon = Icons.Outlined.Flag,
             title = "Priority",
             value = task.priority.label,
-            valueColor = task.priority.color,
+            valueDot = task.priority.color,
+            indicator = Icons.Outlined.UnfoldMore,
             onClick = if (enabled) ({ expanded = true }) else null,
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             TaskPriority.entries.forEach { priority ->
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .background(priority.color, CircleShape),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(priority.label)
-                        }
-                    },
-                    trailingIcon = {
-                        if (priority == task.priority) {
-                            Icon(
-                                Icons.Outlined.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    },
+                SelectMenuItem(
+                    label = priority.label,
+                    dotColor = priority.color,
+                    selected = priority == task.priority,
                     onClick = {
                         expanded = false
                         onPriorityChange(priority)
@@ -923,58 +911,62 @@ private fun DueDateRow(
     task: BoardTask,
     enabled: Boolean,
     onPick: () -> Unit,
-    onClear: () -> Unit,
 ) {
-    val dueDate = task.dueDate
-    Column {
-        DetailRow(
-            icon = Icons.Outlined.DateRange,
-            title = "Due Date",
-            value = dueDate?.let {
-                dueDateLongFormat.format(it.atZone(ZoneId.systemDefault()))
-            } ?: "No due date",
-            valueColor = if (task.isOverdue) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            onClick = if (enabled) onPick else null,
-        )
-        if (dueDate != null && enabled) {
-            TextButton(
-                onClick = onClear,
-                modifier = Modifier.padding(start = 32.dp),
-            ) {
-                Text("Clear Due Date", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
+    val dueDay = task.dueDay
+    DetailRow(
+        icon = Icons.Outlined.DateRange,
+        title = "Due Date",
+        value = dueDay?.let { dueDateLongFormat.format(it) } ?: "No due date",
+        // Like the rows above it, the value text stays neutral and the state
+        // rides on the dot: red once the due day has passed.
+        valueDot = if (dueDay != null && task.isOverdue) {
+            MaterialTheme.colorScheme.error
+        } else {
+            null
+        },
+        indicator = Icons.Outlined.ChevronRight,
+        onClick = if (enabled) onPick else null,
+    )
 }
 
-/** System date + time pickers (Android convention), merged into a single Instant. */
-private fun pickDateTime(
-    context: Context,
+/**
+ * Due-date picker: the shared [DayPickerDialog], so the board and the calendar
+ * event editor pick dates on the same month grid. Board due dates are
+ * day-granular, so there is no time step and the pick is stored at UTC
+ * midnight, exactly what the web board writes. Clearing lives in the dialog as
+ * a destructive action, like the iOS due-date editor — the row itself stays a
+ * plain value + chevron.
+ */
+@Composable
+private fun DueDatePickerDialog(
     current: Instant?,
+    onDismiss: () -> Unit,
     onPicked: (Instant) -> Unit,
+    onClear: () -> Unit,
 ) {
-    val calendar = Calendar.getInstance()
-    current?.let { calendar.time = Date.from(it) }
-    DatePickerDialog(
-        context,
-        { _, year, month, day ->
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    calendar.set(year, month, day, hour, minute, 0)
-                    onPicked(calendar.toInstant())
-                },
-                calendar.get(Calendar.HOUR_OF_DAY),
-                calendar.get(Calendar.MINUTE),
-                true,
-            ).show()
+    val today = remember { LocalDate.now() }
+    val initial = remember(current) {
+        current?.atZone(ZoneOffset.UTC)?.toLocalDate() ?: today
+    }
+    DayPickerDialog(
+        title = "Due Date",
+        initialDate = initial,
+        today = today,
+        onDismiss = onDismiss,
+        onPicked = { day -> onPicked(day.atStartOfDay(ZoneOffset.UTC).toInstant()) },
+        extraAction = if (current != null) {
+            {
+                TextButton(
+                    onClick = {
+                        onClear()
+                        onDismiss()
+                    },
+                ) {
+                    Text("Clear Due Date", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        } else {
+            null
         },
-        calendar.get(Calendar.YEAR),
-        calendar.get(Calendar.MONTH),
-        calendar.get(Calendar.DAY_OF_MONTH),
-    ).show()
+    )
 }

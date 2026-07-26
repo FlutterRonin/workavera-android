@@ -80,4 +80,7 @@ dependencies {
     implementation(libs.markdown.renderer.android)
     implementation(libs.markdown.renderer.m3)
     implementation(libs.markdown.renderer.coil3)
+
+    // Move-and-scale image cropper for the avatar flow.
+    implementation(libs.easycrop)
 }

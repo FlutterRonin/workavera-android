@@ -42,8 +42,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -82,6 +80,8 @@ import com.workavera.android.data.model.ApiKeyExpiration
 import com.workavera.android.data.model.CreatedApiKey
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.notifications.RelativeTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -579,10 +579,11 @@ private fun ExpirationRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ApiKeyExpiration.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
+                SelectMenuItem(
+                    label = option.label,
+                    selected = option == expiration,
                     onClick = {
                         expanded = false
                         onSelect(option)

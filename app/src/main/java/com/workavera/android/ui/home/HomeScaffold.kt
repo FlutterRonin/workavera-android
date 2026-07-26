@@ -202,9 +202,14 @@ private fun HomeContent(
         notificationViewModel.listenForRealtimeEvents()
     }
 
+    // The chat detail renders its own header (back + title + actions), so the
+    // scaffold top bar is hidden while it is open.
+    val hideTopBar = currentSection == AppSection.CHAT && chatTopBar.detailOpen
+
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!hideTopBar) {
+                TopAppBar(
                 title = { Text(currentSection.title) },
                 navigationIcon = {
                     if (showMenuButton) {
@@ -291,6 +296,7 @@ private fun HomeContent(
                     }
                 },
             )
+            }
         },
     ) { padding ->
         NavHost(

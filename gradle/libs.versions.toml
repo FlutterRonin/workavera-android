@@ -16,6 +16,8 @@ ktor = "3.1.2"
 coil = "3.1.0"
 # Compose-native markdown rendering (tables, GFM), shared by Docs and Chat.
 markdownRenderer = "0.37.0"
+# Image cropper (move & scale) for the avatar flow.
+easycrop = "0.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,6 +43,7 @@ coil-svg = { group = "io.coil-kt.coil3", name = "coil-svg", version.ref = "coil"
 markdown-renderer-android = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-android", version.ref = "markdownRenderer" }
 markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 markdown-renderer-coil3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-coil3", version.ref = "markdownRenderer" }
+easycrop = { group = "io.github.mr0xf00", name = "easycrop", version.ref = "easycrop" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -36,8 +36,6 @@ import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.Work
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -71,6 +69,8 @@ import com.workavera.android.data.model.SavedChatMemory
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.SearchTextField
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -123,23 +123,23 @@ fun SavedMemoriesScreen(memoryEnabled: Boolean, onDismiss: () -> Unit) {
                                 IconButton(onClick = { filterExpanded = true }) {
                                     Icon(Icons.Outlined.FilterList, contentDescription = "Filter memories")
                                 }
-                                DropdownMenu(
+                                SelectMenu(
                                     expanded = filterExpanded,
                                     onDismissRequest = { filterExpanded = false },
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("All Categories") },
+                                    SelectMenuItem(
+                                        label = "All Categories",
+                                        selected = ui.categoryFilter == null,
                                         onClick = {
                                             filterExpanded = false
                                             viewModel.setCategoryFilter(null)
                                         },
                                     )
                                     MemoryCategory.entries.forEach { category ->
-                                        DropdownMenuItem(
-                                            text = { Text(category.label) },
-                                            leadingIcon = {
-                                                Icon(category.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                                            },
+                                        SelectMenuItem(
+                                            label = category.label,
+                                            icon = category.icon,
+                                            selected = ui.categoryFilter == category,
                                             onClick = {
                                                 filterExpanded = false
                                                 viewModel.setCategoryFilter(category)
@@ -545,16 +545,15 @@ private fun MemoryEditorDialog(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            DropdownMenu(
+                            SelectMenu(
                                 expanded = categoryExpanded,
                                 onDismissRequest = { categoryExpanded = false },
                             ) {
                                 MemoryCategory.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option.label) },
-                                        leadingIcon = {
-                                            Icon(option.icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                                        },
+                                    SelectMenuItem(
+                                        label = option.label,
+                                        icon = option.icon,
+                                        selected = option == category,
                                         onClick = {
                                             categoryExpanded = false
                                             category = option

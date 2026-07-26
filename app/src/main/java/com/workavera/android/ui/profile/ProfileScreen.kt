@@ -1,6 +1,5 @@
 package com.workavera.android.ui.profile
 
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -39,21 +38,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mr0xf00.easycrop.CropError
+import com.mr0xf00.easycrop.CropResult
+import com.mr0xf00.easycrop.crop
+import com.mr0xf00.easycrop.rememberImageCropper
 import com.workavera.android.data.AuthState
 import com.workavera.android.data.model.AvatarUpload
 import com.workavera.android.data.model.ProfileUpdate
 import com.workavera.android.data.model.UserStatus
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.components.AvatarView
+import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.StatusSelect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Trigger for the Edit action in the home top bar (the iOS toolbar's "Edit"
@@ -80,23 +90,65 @@ fun ProfileScreen(
     var showChangePassword by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showAvatarPreview by remember { mutableStateOf(false) }
-    var cropUri by remember { mutableStateOf<Uri?>(null) }
     var avatarUploading by remember { mutableStateOf(false) }
     var avatarError by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imageCropper = rememberImageCropper()
+
+    fun uploadAvatar(bytes: ByteArray) {
+        avatarUploading = true
+        avatarError = null
+        val profile = ProfileUpdate(
+            name = user.name,
+            phone = user.phone,
+            title = user.title,
+            bio = user.bio,
+            status = user.userStatus,
+        )
+        viewModel.updateProfile(
+            profile,
+            AvatarUpload(bytes, "avatar.jpg", "image/jpeg"),
+        ) { error ->
+            avatarUploading = false
+            avatarError = error
+        }
+    }
 
     val avatarPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
-        if (uri != null) cropUri = uri
+        if (uri != null) {
+            scope.launch {
+                when (val result = imageCropper.crop(uri, context)) {
+                    is CropResult.Success -> {
+                        val bytes = withContext(Dispatchers.Default) {
+                            AvatarImageProcessor.compressAvatar(
+                                result.bitmap.asAndroidBitmap(),
+                            )
+                        }
+                        uploadAvatar(bytes)
+                    }
+                    is CropError -> avatarError = "Could not load the photo."
+                    else -> Unit // Cancelled
+                }
+            }
+        }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    ExpressivePullToRefreshBox(
+        isRefreshing = viewModel.isRefreshingProfile,
+        onRefresh = viewModel::refreshProfile,
+        modifier = Modifier.fillMaxSize(),
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 560.dp)
@@ -230,6 +282,7 @@ fun ProfileScreen(
             }
         }
     }
+    }
 
     if (topBarState.showEditProfile) {
         EditProfileDialog(
@@ -264,30 +317,8 @@ fun ProfileScreen(
             },
         )
     }
-    cropUri?.let { uri ->
-        AvatarCropDialog(
-            uri = uri,
-            onConfirm = { bytes ->
-                cropUri = null
-                avatarUploading = true
-                avatarError = null
-                val profile = ProfileUpdate(
-                    name = user.name,
-                    phone = user.phone,
-                    title = user.title,
-                    bio = user.bio,
-                    status = user.userStatus,
-                )
-                viewModel.updateProfile(
-                    profile,
-                    AvatarUpload(bytes, "avatar.jpg", "image/jpeg"),
-                ) { error ->
-                    avatarUploading = false
-                    avatarError = error
-                }
-            },
-            onDismiss = { cropUri = null },
-        )
+    imageCropper.cropState?.let { cropState ->
+        AvatarCropperDialog(state = cropState)
     }
     if (showSignOutConfirm) {
         AlertDialog(

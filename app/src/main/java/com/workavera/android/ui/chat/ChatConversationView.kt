@@ -24,25 +24,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -71,6 +64,10 @@ import com.workavera.android.data.model.ChatTokenUsage
 import com.workavera.android.data.model.LlmTokenFormat
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
+import com.workavera.android.ui.components.SelectMenu
+import com.workavera.android.ui.components.SelectMenuItem
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormTextField
 import com.workavera.android.ui.theme.PriorityHigh
 
 /**
@@ -236,12 +233,14 @@ fun ChatConversationView(
             onDismissRequest = { showRename = false },
             title = { Text("Rename conversation") },
             text = {
-                OutlinedTextField(
-                    value = renameDraft,
-                    onValueChange = { renameDraft = it },
-                    label = { Text("Title") },
-                    singleLine = true,
-                )
+                FormCard {
+                    FormTextField(
+                        value = renameDraft,
+                        onValueChange = { renameDraft = it },
+                        placeholder = "Title",
+                        enabled = true,
+                    )
+                }
             },
             confirmButton = {
                 TextButton(
@@ -355,49 +354,15 @@ private fun DetailMenu(
         IconButton(onClick = { menuExpanded = true }, enabled = enabled) {
             Icon(Icons.Outlined.MoreVert, contentDescription = "Conversation actions")
         }
-        DropdownMenu(
+        ConversationActionMenu(
+            conversation = conversation,
             expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(if (conversation.pinned) "Unpin" else "Pin") },
-                leadingIcon = { Icon(Icons.Outlined.PushPin, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-                    onTogglePin()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Rename") },
-                leadingIcon = { Icon(Icons.Outlined.Edit, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-                    onRename()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Archive") },
-                leadingIcon = { Icon(Icons.Outlined.Archive, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-                    onArchive()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                leadingIcon = {
-                    Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                },
-                onClick = {
-                    menuExpanded = false
-                    onDelete()
-                },
-            )
-        }
+            onDismiss = { menuExpanded = false },
+            onTogglePin = onTogglePin,
+            onRename = onRename,
+            onArchive = onArchive,
+            onDelete = onDelete,
+        )
     }
 }
 
@@ -562,13 +527,14 @@ private fun ChatComposer(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                DropdownMenu(
+                SelectMenu(
                     expanded = modelMenuExpanded,
                     onDismissRequest = { modelMenuExpanded = false },
                 ) {
                     models.forEach { model ->
-                        DropdownMenuItem(
-                            text = { Text(model.name) },
+                        SelectMenuItem(
+                            label = model.name,
+                            selected = model.id == selectedModelId,
                             onClick = {
                                 modelMenuExpanded = false
                                 onSelectModel(model.id)

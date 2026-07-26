@@ -229,9 +229,14 @@ class PocketBaseApi(
                             "avatar",
                             avatar.data,
                             Headers.build {
+                                // Only the filename parameter: Ktor writes its
+                                // own `form-data; name="avatar"` disposition
+                                // and merges this in — a full disposition here
+                                // would duplicate and PocketBase would treat
+                                // the part as a plain form field, not a file.
                                 append(
                                     HttpHeaders.ContentDisposition,
-                                    "form-data; name=\"avatar\"; filename=\"${avatar.fileName}\"",
+                                    "filename=\"${avatar.fileName}\"",
                                 )
                                 append(HttpHeaders.ContentType, avatar.mimeType)
                             },

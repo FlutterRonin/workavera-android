@@ -29,17 +29,17 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -57,7 +58,11 @@ import com.workavera.android.data.model.LlmModel
 import com.workavera.android.data.model.ReadingItem
 import com.workavera.android.data.model.ReadingItemInput
 import com.workavera.android.data.model.ReadingStatus
+import com.workavera.android.ui.components.ActionMenu
+import com.workavera.android.ui.components.ActionMenuItem
 import com.workavera.android.ui.notifications.RelativeTime
+import com.workavera.android.ui.settings.FormCard
+import com.workavera.android.ui.settings.FormTextField
 import java.net.URI
 
 /**
@@ -111,47 +116,55 @@ internal fun AddReadingItemSheet(
                 fontWeight = FontWeight.SemiBold,
             )
             SheetSection("Link") {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    placeholder = { Text("https://example.com/article") },
-                    singleLine = true,
-                    enabled = !isSaving,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Next,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    placeholder = { Text("Title") },
-                    singleLine = true,
-                    enabled = !isSaving,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                FormCard {
+                    FormTextField(
+                        value = url,
+                        onValueChange = { url = it },
+                        placeholder = "https://example.com/article",
+                        enabled = !isSaving,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Next,
+                        ),
+                    )
+                    SheetFieldDivider()
+                    FormTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        placeholder = "Title",
+                        enabled = !isSaving,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    )
+                }
             }
             SheetSection("Details") {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    placeholder = { Text("Description (optional)") },
-                    minLines = 3,
-                    maxLines = 6,
-                    enabled = !isSaving,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = tags,
-                    onValueChange = { tags = it },
-                    placeholder = { Text("Tags, separated by commas") },
-                    singleLine = true,
-                    enabled = !isSaving,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                FormCard {
+                    TextField(
+                        value = description,
+                        onValueChange = { description = it },
+                        placeholder = { Text("Description (optional)") },
+                        minLines = 3,
+                        maxLines = 6,
+                        enabled = !isSaving,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            disabledIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    SheetFieldDivider()
+                    FormTextField(
+                        value = tags,
+                        onValueChange = { tags = it },
+                        placeholder = "Tags, separated by commas",
+                        enabled = !isSaving,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    )
+                }
             }
             if (errorMessage != null) {
                 Text(
@@ -195,6 +208,11 @@ private fun SheetSection(title: String, content: @Composable () -> Unit) {
         )
         content()
     }
+}
+
+@Composable
+private fun SheetFieldDivider() {
+    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 }
 
 /**
@@ -269,23 +287,19 @@ internal fun ReadingDetailSheet(
                     IconButton(onClick = { menuExpanded = true }) {
                         Icon(Icons.Outlined.MoreHoriz, contentDescription = "Item actions")
                     }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    ActionMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         when (item.readingStatus) {
-                            ReadingStatus.UNREAD -> DropdownMenuItem(
-                                text = { Text("Mark as Read") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ReadingStatus.UNREAD -> ActionMenuItem(
+                                label = "Mark as Read",
+                                icon = Icons.Outlined.CheckCircle,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.updateStatus(item, ReadingStatus.READ) { updated -> item = updated }
                                 },
                             )
-                            ReadingStatus.READ -> DropdownMenuItem(
-                                text = { Text("Mark as Unread") },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Circle, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ReadingStatus.READ -> ActionMenuItem(
+                                label = "Mark as Unread",
+                                icon = Icons.Filled.Circle,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.updateStatus(item, ReadingStatus.UNREAD) { updated -> item = updated }
@@ -294,22 +308,18 @@ internal fun ReadingDetailSheet(
                             ReadingStatus.ARCHIVED -> {}
                         }
                         if (item.readingStatus != ReadingStatus.ARCHIVED) {
-                            DropdownMenuItem(
-                                text = { Text("Archive") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Archive",
+                                icon = Icons.Outlined.Archive,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.updateStatus(item, ReadingStatus.ARCHIVED) { updated -> item = updated }
                                 },
                             )
                         } else {
-                            DropdownMenuItem(
-                                text = { Text("Restore as Unread") },
-                                leadingIcon = {
-                                    Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Restore as Unread",
+                                icon = Icons.AutoMirrored.Outlined.Undo,
                                 onClick = {
                                     menuExpanded = false
                                     viewModel.updateStatus(item, ReadingStatus.UNREAD) { updated -> item = updated }

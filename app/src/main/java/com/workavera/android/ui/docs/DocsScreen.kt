@@ -38,8 +38,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -65,9 +63,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.workavera.android.data.model.DocsViewFilter
+import com.workavera.android.data.model.DocumentKind
 import com.workavera.android.data.model.DocumentStatus
 import com.workavera.android.data.model.DocumentSummary
-import com.workavera.android.data.model.DocumentKind
+import com.workavera.android.ui.components.ActionMenu
+import com.workavera.android.ui.components.ActionMenuDivider
+import com.workavera.android.ui.components.ActionMenuItem
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.ExpressivePullToRefreshBox
 import com.workavera.android.ui.components.LoadingIndicator
@@ -388,42 +389,30 @@ private fun DocumentCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    ActionMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         if (document.documentStatus == DocumentStatus.DRAFT) {
-                            DropdownMenuItem(
-                                text = { Text(if (document.pinned) "Unpin" else "Pin") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.PushPin, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = if (document.pinned) "Unpin" else "Pin",
+                                icon = Icons.Outlined.PushPin,
                                 onClick = { menuExpanded = false; onTogglePin() },
                             )
-                            DropdownMenuItem(
-                                text = { Text("Archive") },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.Archive, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Archive",
+                                icon = Icons.Outlined.Archive,
                                 onClick = { menuExpanded = false; onSetArchived(true) },
                             )
                         } else {
-                            DropdownMenuItem(
-                                text = { Text("Restore") },
-                                leadingIcon = {
-                                    Icon(Icons.AutoMirrored.Outlined.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
-                                },
+                            ActionMenuItem(
+                                label = "Restore",
+                                icon = Icons.AutoMirrored.Outlined.Undo,
                                 onClick = { menuExpanded = false; onSetArchived(false) },
                             )
                         }
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                            },
+                        ActionMenuDivider()
+                        ActionMenuItem(
+                            label = "Delete",
+                            icon = Icons.Outlined.Delete,
+                            destructive = true,
                             onClick = { menuExpanded = false; onDelete() },
                         )
                     }
