@@ -67,14 +67,21 @@ fun ChatToolCard(
     submittingApprovalIds: Set<String>,
     onRespondApproval: (String, Boolean) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
     val approvalObject = approvalData as? JsonObject
     val approvalId = approvalObject?.get("approvalId")?.jsonPrimitive?.contentOrNull
     val awaitingApproval = part.state == "approval-requested" &&
         runActive &&
         messageStatus != ChatMessageStatus.ERROR &&
         messageStatus != ChatMessageStatus.CANCELLED
+
+    // The approve and reject buttons live in the collapsed region, so a card
+    // that still needs a decision has to start expanded or the run silently
+    // stalls with no visible way to act. Derived instead of initialised once so
+    // that a card which only becomes actionable later also expands. An explicit
+    // tap always wins.
+    var manualExpanded by remember { mutableStateOf<Boolean?>(null) }
+    val needsAttention = awaitingApproval || part.state == "approval-responded"
+    val expanded = manualExpanded ?: needsAttention
     val confirmationIsDestructive = approvalObject
         ?.get("presentation")?.let { it as? JsonObject }
         ?.get("confirmVariant")?.jsonPrimitive?.contentOrNull == "destructive"
@@ -96,7 +103,7 @@ fun ChatToolCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable { expanded = !expanded }
+            .clickable { manualExpanded = !expanded }
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
