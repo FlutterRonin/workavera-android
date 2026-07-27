@@ -162,6 +162,8 @@ internal data class DocsToolMoveResult(
 internal class DocsToolPayload private constructor(
     val documents: List<DocsToolDocument> = emptyList(),
     val folders: List<DocsToolFolder> = emptyList(),
+    /** True when docs_ensure_folder created the folder rather than reusing one. */
+    val folderWasCreated: Boolean = false,
     val isCreation: Boolean = false,
     val changed: Boolean? = null,
     val matches: Int? = null,
@@ -232,6 +234,17 @@ internal class DocsToolPayload private constructor(
                     DocsToolPayload(
                         chunkContentLength = obj.int("contentLength"),
                         chunkRevision = obj.int("revision"),
+                    )
+                }
+                // The card is dispatched by the `docs_` prefix, so leaving this
+                // unparsed would render an empty card rather than fall through
+                // to the generic one.
+                "docs_ensure_folder" -> {
+                    val obj = value as? JsonObject ?: return null
+                    val folder = (obj["folder"] as? JsonObject)?.decode<DocsToolFolder>() ?: return null
+                    DocsToolPayload(
+                        folders = listOf(folder),
+                        folderWasCreated = obj.bool("created") ?: false,
                     )
                 }
                 "docs_list_folders" -> {
@@ -568,6 +581,11 @@ internal data class CalendarToolMutationItem(
 
 internal class CalendarToolPayload private constructor(
     val days: List<CalendarToolDay> = emptyList(),
+    /** Flat matches from calendar_search_events; whole events, not occurrences. */
+    val matches: List<CalendarToolEvent> = emptyList(),
+    val isSearch: Boolean = false,
+    /** False when the backend capped the result, so the card can say so. */
+    val searchComplete: Boolean = true,
     val mutationTotal: Int = 0,
     val mutationSucceeded: Int = 0,
     val mutationItems: List<CalendarToolMutationItem> = emptyList(),
@@ -580,6 +598,15 @@ internal class CalendarToolPayload private constructor(
                 "calendar_get_schedule" -> {
                     val dayValues = (value as? JsonObject)?.get("days") as? JsonArray ?: return null
                     CalendarToolPayload(days = dayValues.mapNotNull(::day))
+                }
+                "calendar_search_events" -> {
+                    val obj = value as? JsonObject ?: return null
+                    val events = obj["events"] as? JsonArray ?: return null
+                    CalendarToolPayload(
+                        matches = events.mapNotNull { it.decode<CalendarToolEvent>() },
+                        isSearch = true,
+                        searchComplete = obj.bool("complete") ?: true,
+                    )
                 }
                 "calendar_create_event", "calendar_update_event" -> {
                     val obj = value as? JsonObject ?: return null

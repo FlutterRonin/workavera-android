@@ -39,9 +39,9 @@ import androidx.compose.material.icons.outlined.FindReplace
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Place
@@ -480,8 +480,9 @@ private fun docsToolMeta(toolName: String): DocsToolMeta = when (toolName) {
     "docs_move" -> DocsToolMeta("Move Documents", Icons.Outlined.Folder, "Moving…")
     "docs_replace" -> DocsToolMeta("Replace Text", Icons.Outlined.FindReplace, "Replacing…")
     "docs_write_chunk" -> DocsToolMeta("Write Document", Icons.Outlined.Edit, "Writing…")
+    "docs_ensure_folder" -> DocsToolMeta("Document Folder", Icons.Outlined.Folder, "Resolving…")
     "docs_list_folders" -> DocsToolMeta("Document Folders", Icons.Outlined.Folder, "Loading…")
-    else -> DocsToolMeta("Document Tool", Icons.Outlined.InsertDriveFile, "Working…")
+    else -> DocsToolMeta("Document Tool", Icons.AutoMirrored.Outlined.InsertDriveFile, "Working…")
 }
 
 private const val DOCS_SEARCH_ROW_LIMIT = 4
@@ -526,6 +527,10 @@ internal fun DocsToolCard(part: ChatMessagePart) {
                     payload.chunkRevision?.let { parts.add("R$it") }
                     if (parts.isEmpty()) "Completed" else parts.joinToString(" · ")
                 }
+                "docs_ensure_folder" -> {
+                    val name = payload.folders.firstOrNull()?.name ?: "Folder"
+                    if (payload.folderWasCreated) "Created \u201C$name\u201D" else "Using \u201C$name\u201D"
+                }
                 "docs_list_folders" ->
                     if (payload.folders.size == 1) "1 folder" else "${payload.folders.size} folders"
                 else -> "Completed"
@@ -550,7 +555,7 @@ internal fun DocsToolCard(part: ChatMessagePart) {
                     payload.documents.firstOrNull()?.let { DocsDocumentDetail(it, toolName, payload) }
                 "docs_move" -> DocsMoveResultsList(payload.moveResults)
                 "docs_write_chunk" -> DocsChunkDetail(part, payload)
-                "docs_list_folders" -> DocsFolderList(payload.folders)
+                "docs_ensure_folder", "docs_list_folders" -> DocsFolderList(payload.folders)
             }
         }
         ToolErrorText(part)
@@ -885,7 +890,7 @@ private fun boardToolMeta(toolName: String): BoardToolMeta = when (toolName) {
     "board_create_project" -> BoardToolMeta("Create Project", Icons.Outlined.Add, "Creating…")
     "board_update_project" -> BoardToolMeta("Update Project", Icons.Outlined.Edit, "Updating…")
     "board_upsert_state" -> BoardToolMeta("Upsert States", Icons.Outlined.ViewColumn, "Saving…")
-    "board_upsert_label" -> BoardToolMeta("Upsert Labels", Icons.Outlined.Label, "Saving…")
+    "board_upsert_label" -> BoardToolMeta("Upsert Labels", Icons.AutoMirrored.Outlined.Label, "Saving…")
     "board_upsert_member" -> BoardToolMeta("Upsert Members", Icons.Outlined.Group, "Saving…")
     "board_create_task" -> BoardToolMeta("Create Tasks", Icons.Outlined.Add, "Creating…")
     "board_update_task" -> BoardToolMeta("Update Tasks", Icons.Outlined.Edit, "Updating…")
@@ -1177,6 +1182,7 @@ private data class CalendarToolMeta(val label: String, val icon: ImageVector, va
 
 private fun calendarToolMeta(toolName: String): CalendarToolMeta = when (toolName) {
     "calendar_get_schedule" -> CalendarToolMeta("Schedule", Icons.Outlined.CalendarMonth, "Loading…")
+    "calendar_search_events" -> CalendarToolMeta("Event Search", Icons.Outlined.Search, "Searching…")
     "calendar_create_event" ->
         CalendarToolMeta("Create Events", Icons.Outlined.EventAvailable, "Creating…")
     "calendar_update_event" -> CalendarToolMeta("Update Events", Icons.Outlined.Edit, "Updating…")
@@ -1188,6 +1194,9 @@ private const val CALENDAR_MUTATION_ROW_LIMIT = 4
 
 private val calendarDayParser = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.US)
 private val calendarDayHeaderFormat = DateTimeFormatter.ofPattern("EEEE, MMM d", Locale.getDefault())
+private val calendarSearchDateFormat = DateTimeFormatter
+    .ofPattern("MMM d, yyyy", Locale.getDefault())
+    .withZone(ZoneId.systemDefault())
 private val calendarTimeFormat = DateTimeFormatter
     .ofLocalizedTime(FormatStyle.SHORT)
     .withLocale(Locale.getDefault())
@@ -1219,6 +1228,11 @@ internal fun CalendarToolCard(part: ChatMessagePart) {
                 else -> "$total items"
             }
         }
+        payload.isSearch -> when (payload.matches.size) {
+            0 -> "No matching events"
+            1 -> "1 event"
+            else -> "${payload.matches.size} events"
+        }
         payload.isBatchMutation -> "${payload.mutationSucceeded} of ${payload.mutationTotal} succeeded"
         else -> payload.mutationItems.firstOrNull()?.action?.replaceFirstChar(Char::uppercase)
             ?: "Completed"
@@ -1232,13 +1246,40 @@ internal fun CalendarToolCard(part: ChatMessagePart) {
         isWorking = isWorking,
     ) {
         if (payload != null) {
-            if (toolName == "calendar_get_schedule") {
-                CalendarScheduleView(payload)
-            } else {
-                CalendarMutationList(payload.mutationItems)
+            when {
+                toolName == "calendar_get_schedule" -> CalendarScheduleView(payload)
+                payload.isSearch -> CalendarSearchView(payload)
+                else -> CalendarMutationList(payload.mutationItems)
             }
         }
         ToolErrorText(part)
+    }
+}
+
+@Composable
+private fun CalendarSearchView(payload: CalendarToolPayload) {
+    if (payload.matches.isEmpty()) {
+        EmptyNote("No matching events")
+        return
+    }
+    payload.matches.take(CALENDAR_DAY_ROW_LIMIT).forEach {
+        CalendarEventRow(it, showDate = true)
+    }
+    if (payload.matches.size > CALENDAR_DAY_ROW_LIMIT) {
+        Text(
+            "+${payload.matches.size - CALENDAR_DAY_ROW_LIMIT} more events",
+            style = MaterialTheme.typography.labelSmall,
+            color = tertiaryColor,
+        )
+    }
+    if (!payload.searchComplete) {
+        // The backend caps matches, so say the list is partial rather than let
+        // it read as every match.
+        Text(
+            "Showing the first matches. Narrow the search to see the rest.",
+            style = MaterialTheme.typography.labelSmall,
+            color = tertiaryColor,
+        )
     }
 }
 
@@ -1287,8 +1328,12 @@ private fun CalendarDayHeader(date: String) {
     }
 }
 
+/**
+ * showDate is set for search results: those are a flat list rather than rows
+ * grouped under a day header, so each row carries its own date.
+ */
 @Composable
-private fun CalendarEventRow(event: CalendarToolEvent) {
+private fun CalendarEventRow(event: CalendarToolEvent, showDate: Boolean = false) {
     Row {
         Box(
             modifier = Modifier
@@ -1324,6 +1369,16 @@ private fun CalendarEventRow(event: CalendarToolEvent) {
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
                             .padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                }
+            }
+            if (showDate) {
+                event.start?.let { start ->
+                    val repeats = event.recurrence?.let { it != EventRecurrenceFrequency.NONE } ?: false
+                    Text(
+                        calendarSearchDateFormat.format(start) + if (repeats) " onwards" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
