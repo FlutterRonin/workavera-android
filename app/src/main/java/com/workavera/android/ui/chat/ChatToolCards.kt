@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -50,6 +51,8 @@ import com.workavera.android.data.model.prettyPrintedJson
 import com.workavera.android.ui.theme.StatusOnline
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -88,6 +91,24 @@ fun ChatToolCard(
     val confirmationLabel = approvalObject
         ?.get("presentation")?.let { it as? JsonObject }
         ?.get("confirmLabel")?.jsonPrimitive?.contentOrNull ?: "Approve"
+
+    // The tool's own result, when it reports one. Approval-gated tools answer
+    // with {ok, action, reason}, which is how a denial and a business failure
+    // are told apart from a plain success.
+    //
+    // Read defensively with `as?` rather than `jsonPrimitive`, which throws on
+    // a non-primitive: a tool result can come from a third-party MCP server and
+    // is not required to use these keys, let alone these types.
+    val resultObject = part.output as? JsonObject
+    fun resultField(key: String) = resultObject?.get(key) as? JsonPrimitive
+    val isDenied = part.approval?.approved == false ||
+        resultField("action")?.contentOrNull == "denied" ||
+        resultField("reason")?.contentOrNull == "user_denied"
+    val isBusinessFailure = part.state == "output-available" &&
+        resultField("ok")?.booleanOrNull == false &&
+        !isDenied
+    val isFailed = part.state == "output-error" || isBusinessFailure
+    val isCompleted = part.state == "output-available" && !isDenied && !isBusinessFailure
 
     val isWorking = part.state in setOf("input-streaming", "input-available", "approval-responded")
     val isError = part.state == "output-error"
@@ -173,6 +194,44 @@ fun ChatToolCard(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                // Once a decision is made, explain what happened in the tool's
+                // own words rather than leaving the user to read the raw result
+                // JSON. Mirrors the web approval card.
+                if (approvalObject != null) {
+                    val presentation = approvalObject["presentation"] as? JsonObject
+                    fun message(key: String, fallback: String) =
+                        (presentation?.get(key) as? JsonPrimitive)?.contentOrNull ?: fallback
+
+                    when {
+                        part.state == "approval-responded" &&
+                            part.approval?.approved == true &&
+                            !isCompleted && !isFailed ->
+                            OutcomeText(
+                                message("pendingMessage", "Applying approved action…"),
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                        isDenied ->
+                            OutcomeText(
+                                message("deniedMessage", "Action cancelled."),
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+
+                        isCompleted ->
+                            OutcomeText(message("successMessage", "Action completed."), StatusOnline)
+
+                        // An explicit errorText is already rendered above; this
+                        // covers a tool that failed reporting ok=false without one.
+                        isFailed && part.errorText == null ->
+                            OutcomeText(
+                                message(
+                                    "failureMessage",
+                                    "The approved action could not be completed.",
+                                ),
+                                MaterialTheme.colorScheme.error,
+                            )
+                    }
+                }
                 if (awaitingApproval && approvalId != null) {
                     val submitting = approvalId in submittingApprovalIds
                     Row(
@@ -211,6 +270,12 @@ internal fun displayToolName(toolName: String?): String =
         .replace("_", " ")
         .split(" ")
         .joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } }
+
+/** One line describing what happened to an approval-gated action. */
+@Composable
+private fun OutcomeText(text: String, color: Color) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+}
 
 private fun stateLabel(part: ChatMessagePart, awaitingApproval: Boolean): String =
     when (part.state) {
