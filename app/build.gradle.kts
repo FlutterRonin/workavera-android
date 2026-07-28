@@ -16,7 +16,10 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 3
-        versionName = "1.0.1"
+        // Read from the VERSION file rather than repeated here, so the number
+        // the app reports and the one the release artifact is named after
+        // cannot drift apart.
+        versionName = rootProject.file("VERSION").readText().trim()
     }
 
     buildTypes {
