@@ -47,8 +47,13 @@ tasks:
         cp "$apk" "dist/workavera_{{.VERSION}}.apk"
         case "$apk" in
           *unsigned*)
-            echo "WARNING: built unsigned -- app/build.gradle.kts has no release" >&2
-            echo "signingConfig, so this APK cannot be installed as-is." >&2
+            echo >&2
+            echo "WARNING: this APK is unsigned and Android cannot install it." >&2
+            echo "Installing it reports \"packageInfo is null\"." >&2
+            echo >&2
+            echo "To sign it, copy keystore.properties.example to" >&2
+            echo "keystore.properties and follow the instructions in it." >&2
+            echo >&2
             ;;
         esac
       - |

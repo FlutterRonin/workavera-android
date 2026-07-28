@@ -1,4 +1,16 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+// Signing credentials live outside the repository. When the file is absent --
+// a fresh clone, or CI that signs elsewhere -- the release build stays
+// unsigned rather than failing, so `assembleRelease` still works for anyone
+// who only wants to check that it compiles.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -22,8 +34,23 @@ android {
         versionName = rootProject.file("VERSION").readText().trim()
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Null when there are no credentials to sign with. An unsigned APK
+            // cannot be parsed by Android at all, so the build task warns
+            // rather than letting it surface as a failed install.
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

@@ -10,3 +10,6 @@
 .cxx
 /.claude
 /dist
+/keystore.properties
+*.jks
+*.keystore
