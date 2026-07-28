@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -367,6 +369,37 @@ private fun DetailMenu(
 }
 
 /**
+ * Far past the height of any single message, so scrolling to a message with
+ * this offset always clamps to the end of the list rather than to its top.
+ *
+ * An assistant reply carrying a run of tool calls is routinely taller than
+ * the viewport -- often most of the conversation -- and `scrollToItem` alone
+ * puts that item's *top* at the top of the screen, which is nowhere near the
+ * end of the history.
+ */
+private const val TALLER_THAN_ANY_MESSAGE = 1_000_000
+
+/**
+ * Lands on the very end of the list, not the start of its last item.
+ *
+ * A message's height is only known once it has been measured, and measuring
+ * the ones on the way moves the end further down, so a single jump lands
+ * short of it. `canScrollForward` reports whether anything is still below,
+ * which is the exact signal for "not there yet"; the bound is only there so a
+ * list that keeps growing on its own cannot spin forever.
+ */
+private suspend fun LazyListState.scrollToEnd(lastIndex: Int) {
+    var passes = 0
+    do {
+        scrollToItem(lastIndex, TALLER_THAN_ANY_MESSAGE)
+        withFrameNanos {}
+        passes++
+    } while (canScrollForward && passes < MAX_LANDING_PASSES)
+}
+
+private const val MAX_LANDING_PASSES = 10
+
+/**
  * Message history with bottom pinning: while the user is at (or near) the
  * end, new tokens keep the list scrolled down; scrolling up releases it
  * (iOS bottom-sentinel behavior).
@@ -393,7 +426,7 @@ private fun MessageList(
     LaunchedEffect(messages.isNotEmpty()) {
         if (!didInitialScroll && messages.isNotEmpty()) {
             didInitialScroll = true
-            listState.scrollToItem(messages.size - 1)
+            listState.scrollToEnd(messages.lastIndex)
         }
     }
 
@@ -402,7 +435,7 @@ private fun MessageList(
         (last?.parts?.sumOf { it.text?.length ?: 0 } ?: 0)
     LaunchedEffect(scrollSignature) {
         if (didInitialScroll && isPinnedToBottom && messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            listState.animateScrollToItem(messages.lastIndex, TALLER_THAN_ANY_MESSAGE)
         }
     }
 
