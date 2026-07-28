@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.BackHand
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
@@ -68,6 +69,7 @@ import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.SelectMenu
 import com.workavera.android.ui.components.SelectMenuItem
 import com.workavera.android.ui.settings.ApiKeysScreen
+import com.workavera.android.ui.settings.McpServersScreen
 import com.workavera.android.ui.settings.ModelConfigurationsScreen
 import com.workavera.android.ui.settings.ModelSharingScreen
 import com.workavera.android.ui.settings.SavedMemoriesScreen
@@ -92,6 +94,7 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
 
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showApiKeys by remember { mutableStateOf(false) }
+    var showMcpServers by remember { mutableStateOf(false) }
     var showSavedMemories by remember { mutableStateOf(false) }
     var showModelConfigs by remember { mutableStateOf(false) }
     var showModelSharing by remember { mutableStateOf(false) }
@@ -150,12 +153,19 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
 
             SettingsGroup(
                 title = "Developer",
-                footer = "Connect third-party MCP clients to your Workavera tools.",
+                footer = "Connect third-party MCP clients to your Workavera tools, " +
+                    "or register your own MCP servers for Chat to use.",
             ) {
                 NavRow(
                     icon = Icons.Outlined.Key,
                     title = "API Keys",
                     onClick = { showApiKeys = true },
+                )
+                SettingsDivider()
+                NavRow(
+                    icon = Icons.Outlined.CloudQueue,
+                    title = "MCP Servers",
+                    onClick = { showMcpServers = true },
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -249,6 +259,9 @@ fun SettingsScreen(state: AuthState.LoggedIn, authViewModel: AuthViewModel) {
     }
     if (showApiKeys) {
         ApiKeysScreen(onDismiss = { showApiKeys = false })
+    }
+    if (showMcpServers) {
+        McpServersScreen(onDismiss = { showMcpServers = false })
     }
     if (showSavedMemories) {
         SavedMemoriesScreen(

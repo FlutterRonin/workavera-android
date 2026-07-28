@@ -36,6 +36,10 @@ import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.LlmModel
 import com.workavera.android.data.model.LlmModelInput
 import com.workavera.android.data.model.LlmShareTarget
+import com.workavera.android.data.model.McpRefreshResult
+import com.workavera.android.data.model.McpServer
+import com.workavera.android.data.model.McpServerResponse
+import com.workavera.android.data.model.McpToolDecision
 import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.NotificationPage
 import com.workavera.android.data.model.NotificationRealtimeEvent
@@ -337,6 +341,130 @@ class PocketBaseApi(
     /** Revokes (hard-deletes) a key; connected MCP clients lose access immediately. */
     suspend fun revokeApiKey(server: String, token: String, id: String) =
         requestEmpty(server, "api/collections/api_keys/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    // ---- MCP servers (third-party servers whose tools Chat may call) ----
+
+    @Serializable
+    private data class CreateMcpServerPayload(
+        val name: String,
+        val slug: String,
+        val transport: String,
+        val url: String,
+        val headers: Map<String, String>,
+        val approvalPolicy: String,
+    )
+
+    /** Only non-null fields are sent; a null headers map leaves the stored credentials untouched. */
+    @Serializable
+    private data class UpdateMcpServerPayload(
+        val name: String? = null,
+        val url: String? = null,
+        val transport: String? = null,
+        val headers: Map<String, String>? = null,
+        val approvalPolicy: String? = null,
+        val enabled: Boolean? = null,
+    )
+
+    @Serializable
+    private data class UpdateMcpToolsPayload(val tools: List<McpToolDecision>)
+
+    /** Lists the signed-in user's MCP servers, oldest first (matching the Web settings card). */
+    suspend fun getMcpServers(server: String, token: String): List<McpServer> =
+        request<RecordListResponse<McpServer>>(
+            server,
+            "api/collections/mcp_servers/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("sort", "created")
+            parameter("perPage", "200")
+        }.items
+
+    /**
+     * Registers a server via the feature route, which validates the endpoint and
+     * keeps credentials write-only. The record starts with no tools; a refresh
+     * is what loads them.
+     */
+    suspend fun createMcpServer(
+        server: String,
+        token: String,
+        name: String,
+        slug: String,
+        transport: String,
+        url: String,
+        headers: Map<String, String>,
+        approvalPolicy: String,
+    ): McpServer = request<McpServerResponse>(server, "api/mcp-servers", HttpMethod.Post) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(
+            CreateMcpServerPayload(
+                name = name,
+                slug = slug,
+                transport = transport,
+                url = url,
+                headers = headers,
+                approvalPolicy = approvalPolicy,
+            ),
+        )
+    }.toModel()
+
+    /** Partially updates a server; pass null for every field that stays unchanged. */
+    suspend fun updateMcpServer(
+        server: String,
+        token: String,
+        id: String,
+        name: String? = null,
+        url: String? = null,
+        transport: String? = null,
+        headers: Map<String, String>? = null,
+        approvalPolicy: String? = null,
+        enabled: Boolean? = null,
+    ): McpServer = request<McpServerResponse>(server, "api/mcp-servers/$id", HttpMethod.Patch) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(
+            UpdateMcpServerPayload(
+                name = name,
+                url = url,
+                transport = transport,
+                headers = headers,
+                approvalPolicy = approvalPolicy,
+                enabled = enabled,
+            ),
+        )
+    }.toModel()
+
+    /**
+     * Contacts the upstream server, locks the fetched tool definitions, and
+     * reports the diff. A failed refresh comes back as [McpRefreshResult.ok]
+     * false (HTTP 200), with the failure also stored as the server's last_error.
+     */
+    suspend fun refreshMcpServer(server: String, token: String, id: String): McpRefreshResult =
+        request(server, "api/mcp-servers/$id/refresh", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /**
+     * Applies the user's review decisions (enabled + approval per tool) — the
+     * only way a tool becomes available to the assistant.
+     */
+    suspend fun updateMcpTools(
+        server: String,
+        token: String,
+        id: String,
+        decisions: List<McpToolDecision>,
+    ): McpServer = request<McpServerResponse>(server, "api/mcp-servers/$id/tools", HttpMethod.Patch) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(UpdateMcpToolsPayload(tools = decisions))
+    }.toModel()
+
+    /** Removes the server and its stored credentials; Chat stops offering its tools immediately. */
+    suspend fun deleteMcpServer(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/mcp_servers/records/$id", HttpMethod.Delete) {
             header(HttpHeaders.Authorization, token)
         }
 

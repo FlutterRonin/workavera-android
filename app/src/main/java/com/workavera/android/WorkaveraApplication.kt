@@ -18,6 +18,7 @@ import com.workavera.android.data.ContactsRepository
 import com.workavera.android.data.DashboardRepository
 import com.workavera.android.data.DocsRepository
 import com.workavera.android.data.LlmModelsRepository
+import com.workavera.android.data.McpServersRepository
 import com.workavera.android.data.NotificationRepository
 import com.workavera.android.data.PreferencesRepository
 import com.workavera.android.data.ReadingRepository
@@ -56,6 +57,7 @@ class AppContainer(context: Context) {
     val preferencesRepository = PreferencesRepository(api, authRepository, settings)
     val responseCache = ResponseCache(context, json)
     val apiKeysRepository = ApiKeysRepository(api, authRepository, responseCache)
+    val mcpServersRepository = McpServersRepository(api, authRepository, responseCache)
     val savedMemoriesRepository = SavedMemoriesRepository(api, authRepository, responseCache)
     val dashboardRepository = DashboardRepository(api, authRepository, responseCache)
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)

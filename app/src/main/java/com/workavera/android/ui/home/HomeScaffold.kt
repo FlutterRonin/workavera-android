@@ -131,6 +131,10 @@ fun HomeScaffold(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
         val scope = rememberCoroutineScope()
         ModalNavigationDrawer(
             drawerState = drawerState,
+            // AnchoredDraggable eagerly consumes the first pointer gesture while
+            // interrupting an in-flight animation. Keep drawer items responsive
+            // when the user taps a destination before the opening animation ends.
+            gesturesEnabled = !drawerState.isAnimationRunning,
             drawerContent = {
                 ModalDrawerSheet {
                     DrawerContent(
