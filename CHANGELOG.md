@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to Workavera for Android are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and versions follow [Semantic Versioning](https://semver.org/).
+
+Server-side changes are recorded separately, in the
+[Workavera changelog](https://github.com/xusenlin/workavera/blob/main/CHANGELOG.md).
+
+## [Unreleased]
+
+### Added
+
+- Connect your own MCP servers from Settings and use their tools in Chat.
+  Headers hold the credentials that reach the remote server and are
+  write-only, so leaving a header field untouched keeps what is stored
+  rather than clearing it. Tool definitions only arrive from a refresh
+  against the server; review decides only whether a tool is enabled and
+  whether its calls need approval, so an upstream server cannot silently
+  redefine a tool that was already approved.
+- Tool cards for folder creation and calendar event search. Both tools were
+  reaching a card that could not parse their payload, so they rendered a
+  header with nothing under it. The folder card distinguishes creating a
+  folder from reusing one, and event rows carry their own date, marking a
+  repeating event's start as "onwards" so it is not read as the only time it
+  occurs.
+- An approved action now reports what actually happened, from the outcome
+  the server supplies, rather than leaving raw result JSON as the only
+  account of it.
+
+### Changed
+
+- A long message you sent collapses to twelve lines behind a toggle. Laying
+  out a pasted log costs the same whether or not it is on screen, so the cap
+  bounds the work as well as the height.
+- Expanded reasoning is set further back from the reply beneath it. At the
+  previous shade the two ran together with no visible boundary where the
+  answer began.
+
+### Fixed
+
+- A conversation opens at its end rather than at the top of its last
+  message. A tool-heavy reply is routinely taller than the screen — often
+  most of the conversation — so landing on it left the end well below the
+  fold.
+- An approval request no longer freezes its card on the previous state with
+  no buttons. The stream coalesces chunks into at most one refresh per
+  interval, which assumes another chunk will follow to carry a skipped
+  render; an approval request breaks that assumption, because the server
+  blocks on the answer, so it is exempt from the throttle.
+- Approval tool cards stay expanded while a decision is pending.
