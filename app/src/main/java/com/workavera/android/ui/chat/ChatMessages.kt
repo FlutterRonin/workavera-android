@@ -464,7 +464,10 @@ private fun ReasoningDisclosure(text: String, isStreaming: Boolean) {
             Text(
                 text,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // onSurfaceVariant alone lands too close to the body text the
+                // reasoning sits directly above, so the two read as one block
+                // and the answer is hard to find.
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
