@@ -136,6 +136,7 @@ private fun SpecializedToolCardShell(
     title: String,
     subtitle: String,
     isWorking: Boolean,
+    parameters: JsonElement? = null,
     collapsible: Boolean = true,
     statusAccessory: (@Composable () -> Unit)? = null,
     expandedContent: @Composable ColumnScope.() -> Unit,
@@ -194,10 +195,10 @@ private fun SpecializedToolCardShell(
 
         if (!collapsible || expanded) {
             Spacer(Modifier.height(10.dp))
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                content = expandedContent,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                parameters?.let { ToolParametersPanel(it) }
+                expandedContent()
+            }
         }
     }
 }
@@ -433,6 +434,7 @@ internal fun MemoryToolCard(part: ChatMessagePart) {
         title = title,
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
         collapsible = false,
         statusAccessory = {
             if (!isWorking) {
@@ -544,6 +546,7 @@ internal fun DocsToolCard(part: ChatMessagePart) {
         title = meta.label,
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
     ) {
         if (isWorking) {
             docsInputSummary(part, toolName)?.let { WorkingInputPreview(meta.icon, it) }
@@ -823,6 +826,7 @@ internal fun ContactsToolCard(part: ChatMessagePart, resolveAvatar: ToolAvatarRe
         title = "Search Contacts",
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
     ) {
         if (isWorking) {
             part.inputString("query")?.takeIf { it.isNotEmpty() }?.let {
@@ -940,6 +944,7 @@ internal fun BoardToolCard(part: ChatMessagePart, resolveAvatar: ToolAvatarResol
         title = meta.label,
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
     ) {
         if (isWorking) {
             part.inputString("query")?.takeIf { it.isNotEmpty() }?.let {
@@ -1244,6 +1249,7 @@ internal fun CalendarToolCard(part: ChatMessagePart) {
         title = meta.label,
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
     ) {
         if (payload != null) {
             when {
@@ -1551,6 +1557,7 @@ internal fun ReadingToolCard(part: ChatMessagePart) {
         title = meta.label,
         subtitle = subtitle,
         isWorking = isWorking,
+        parameters = part.input,
     ) {
         if (isWorking) {
             part.inputString("query")?.takeIf { it.isNotEmpty() }?.let {

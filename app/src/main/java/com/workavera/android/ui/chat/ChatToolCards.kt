@@ -4,15 +4,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Build
@@ -26,6 +29,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -181,9 +185,7 @@ fun ChatToolCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                part.input?.let { input ->
-                    JsonSection(title = "Input", value = input.decodingEmbeddedJson())
-                }
+                part.input?.let { input -> ToolParametersPanel(input) }
                 part.output?.let { output ->
                     JsonSection(title = "Output", value = output.decodingEmbeddedJson())
                 }
@@ -288,6 +290,100 @@ private fun stateLabel(part: ChatMessagePart, awaitingApproval: Boolean): String
         "output-error" -> "Failed"
         else -> part.state ?: "Tool call"
     }
+
+/**
+ * Parameters stay cheap while collapsed. The bounded JSON preview is built
+ * only after expansion; the complete JSON is built only when copied.
+ */
+@Composable
+internal fun ToolParametersPanel(value: JsonElement) {
+    val summary = remember(value) { ToolParameterFormatter.summary(value) }
+    if (summary.isEmpty()) return
+
+    val clipboard = LocalClipboardManager.current
+    var expanded by remember(value) { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "PARAMETERS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                summary,
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                Icons.Outlined.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse parameters" else "Expand parameters",
+                modifier = Modifier
+                    .size(16.dp)
+                    .rotate(if (expanded) 180f else 0f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Outlined.ContentCopy,
+                contentDescription = "Copy full parameters",
+                modifier = Modifier
+                    .size(14.dp)
+                    .clickable {
+                        clipboard.setText(
+                            AnnotatedString(ToolParameterFormatter.fullText(value)),
+                        )
+                    },
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (expanded) {
+            val preview = remember(value) { ToolParameterFormatter.preview(value) }
+            HorizontalDivider()
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    preview.text,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    modifier = Modifier.padding(8.dp),
+                )
+            }
+            if (preview.truncated) {
+                HorizontalDivider()
+                Text(
+                    "Preview limited to 12,000 characters, 10 array items, and 4 levels. " +
+                        "Copy to inspect the complete parameters.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
 
 /**
  * Pretty-printed JSON well with a copy button; above [PREVIEW_LIMIT] chars
