@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.workavera.android.data.model.ChatMessage
@@ -110,21 +111,7 @@ fun ChatMessageItem(
         Spacer(Modifier.height(7.dp))
 
         if (isUser) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                    .padding(horizontal = 13.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                message.parts.forEach { part ->
-                    val text = part.text
-                    if (part.type == "text" && text != null) {
-                        Text(text, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
+            UserMessageBubble(parts = message.parts)
         } else {
             if (message.showsWaitingIndicator) {
                 TypingDots()
@@ -368,6 +355,74 @@ private fun AssistantPartView(
         else -> Unit
     }
 }
+
+/**
+ * Right-aligned bubble for what the user sent, collapsed if it is long
+ * (iOS UserMessageBubble).
+ *
+ * A pasted log or file is easily thousands of lines, and laying all of them
+ * out costs the same whether or not they are on screen. Capping the collapsed
+ * height caps that work too, so a long message costs what a short one does
+ * until the reader asks for the rest.
+ */
+@Composable
+private fun UserMessageBubble(parts: List<ChatMessagePart>) {
+    val texts = remember(parts) {
+        parts.mapNotNull { part -> part.text?.takeIf { part.type == "text" } }
+    }
+    // Deliberately a character/line count rather than a measurement: asking
+    // for the real height is the work this exists to avoid.
+    val isLong = remember(texts) {
+        texts.sumOf { it.length } > LONG_MESSAGE_CHARACTERS ||
+            texts.sumOf { text -> 1 + text.count { it == '\n' } } > COLLAPSED_LINE_LIMIT
+    }
+    var expanded by remember(parts) { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth(0.85f)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+            .padding(horizontal = 13.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        texts.forEach { text ->
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = if (expanded || !isLong) Int.MAX_VALUE else COLLAPSED_LINE_LIMIT,
+                overflow = if (expanded || !isLong) TextOverflow.Clip else TextOverflow.Ellipsis,
+            )
+        }
+        if (isLong) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (expanded) "Show Less" else "Show More",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Outlined.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Show less" else "Show more",
+                    modifier = Modifier
+                        .size(14.dp)
+                        .rotate(if (expanded) 180f else 0f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+private const val COLLAPSED_LINE_LIMIT = 12
+private const val LONG_MESSAGE_CHARACTERS = 500
 
 /** Collapsible reasoning ("thinking") section (iOS ReasoningDisclosure). */
 @Composable
