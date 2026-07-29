@@ -818,6 +818,9 @@ class PocketBaseApi(
     @Serializable
     private data class TaskDueDatePayload(@SerialName("due_date") val dueDate: String)
 
+    @Serializable
+    private data class ArchiveTaskPayload(val archived: Boolean)
+
     /**
      * Board page load: 1 paged request (project preferences, expanding the
      * project and its owner) + 4 concurrent full-list fetches (states / tasks /
@@ -1034,6 +1037,16 @@ class PocketBaseApi(
         header(HttpHeaders.Authorization, token)
         contentType(ContentType.Application.Json)
         setBody(TaskDueDatePayload(dueDate = dueDate?.let(::formatServerInstant) ?: ""))
+    }
+
+    suspend fun archiveBoardTask(
+        server: String,
+        token: String,
+        id: String,
+    ) = requestEmpty(server, "api/collections/board_tasks/records/$id", HttpMethod.Patch) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(ArchiveTaskPayload(archived = true))
     }
 
     // ---- Calendar (events + task deadlines + timezone) ----

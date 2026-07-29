@@ -211,6 +211,34 @@ class BoardViewModel(
         }
     }
 
+    /** Archives a task optimistically; archived tasks are excluded from normal Board queries. */
+    fun archiveTask(taskId: String, onComplete: (Boolean) -> Unit = {}) {
+        val location = findTask(taskId) ?: return
+        if (taskId in uiState.updatingTaskIds) return
+        if (location.project.states.lastOrNull()?.id != location.task.stateId) return
+
+        val snapshot = uiState.projects
+        removeTask(taskId)
+        uiState = uiState.copy(updatingTaskIds = uiState.updatingTaskIds + taskId)
+        viewModelScope.launch {
+            try {
+                repository.archiveTask(taskId)
+                uiState = uiState.copy(updatingTaskIds = uiState.updatingTaskIds - taskId)
+                refresh()
+                onComplete(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    projects = snapshot,
+                    updatingTaskIds = uiState.updatingTaskIds - taskId,
+                    error = errorMessage(e, "Could not archive the task."),
+                )
+                onComplete(false)
+            }
+        }
+    }
+
     /** Realtime signal loop: a suspend function started from a LaunchedEffect; cancelled automatically on leaving the board. */
     suspend fun listenForRealtimeSignals() {
         var backoffMs = 1_000L
@@ -254,6 +282,18 @@ class BoardViewModel(
                                 if (task.id == taskId) transform(task) else task
                             },
                         )
+                    },
+                )
+            },
+        )
+    }
+
+    private fun removeTask(taskId: String) {
+        uiState = uiState.copy(
+            projects = uiState.projects.map { project ->
+                project.copy(
+                    states = project.states.map { state ->
+                        state.copy(tasks = state.tasks.filterNot { it.id == taskId })
                     },
                 )
             },

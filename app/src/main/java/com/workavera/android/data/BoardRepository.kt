@@ -41,6 +41,9 @@ class BoardRepository(
     suspend fun updateDueDate(id: String, dueDate: Instant?) =
         api.updateBoardTaskDueDate(session.server, session.token, id, dueDate)
 
+    suspend fun archiveTask(id: String) =
+        api.archiveBoardTask(session.server, session.token, id)
+
     /** Board realtime signal stream (payloads ignored; refresh trigger only). */
     fun realtimeSignals(): Flow<Unit> =
         api.boardRealtimeSignals(session.server, session.token)

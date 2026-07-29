@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DateRange
@@ -42,6 +44,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -176,8 +179,10 @@ fun BoardScreen(state: AuthState.LoggedIn) {
                     )
                     TaskList(
                         state = selectedState,
+                        isLastState = selectedState?.id == project.states.lastOrNull()?.id,
                         updatingTaskIds = ui.updatingTaskIds,
                         onTaskClick = { selectedTaskId = it },
+                        onArchive = { boardViewModel.archiveTask(it) },
                     )
                 }
             }
@@ -217,8 +222,10 @@ fun BoardScreen(state: AuthState.LoggedIn) {
 @Composable
 private fun TaskList(
     state: BoardState?,
+    isLastState: Boolean,
     updatingTaskIds: Set<String>,
     onTaskClick: (String) -> Unit,
+    onArchive: (String) -> Unit,
 ) {
     if (state == null) return
     if (state.tasks.isEmpty()) {
@@ -243,13 +250,23 @@ private fun TaskList(
                 task = task,
                 isUpdating = task.id in updatingTaskIds,
                 onClick = { onTaskClick(task.id) },
+                onArchive = if (isLastState) {
+                    { onArchive(task.id) }
+                } else {
+                    null
+                },
             )
         }
     }
 }
 
 @Composable
-private fun TaskCard(task: BoardTask, isUpdating: Boolean, onClick: () -> Unit) {
+private fun TaskCard(
+    task: BoardTask,
+    isUpdating: Boolean,
+    onClick: () -> Unit,
+    onArchive: (() -> Unit)?,
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -259,9 +276,32 @@ private fun TaskCard(task: BoardTask, isUpdating: Boolean, onClick: () -> Unit) 
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            if (task.labels.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    task.labels.forEach { LabelChip(it) }
+            if (task.labels.isNotEmpty() || onArchive != null) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FlowRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        task.labels.forEach { LabelChip(it) }
+                    }
+                    if (onArchive != null) {
+                        IconButton(
+                            onClick = onArchive,
+                            enabled = !isUpdating,
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.Archive,
+                                contentDescription = "Archive ${task.title}",
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
             }
