@@ -586,7 +586,7 @@ class PocketBaseApi(
         token: String,
         now: Instant = Instant.now(),
     ): DashboardSummary = coroutineScope {
-        val openTaskFilter = "state.category != \"completed\""
+        val openTaskFilter = "state.category != \"completed\" && archived = false"
         val nowValue = dashboardDate(now)
         val nextWeekValue = dashboardDate(now.plus(7, ChronoUnit.DAYS))
 
@@ -854,11 +854,12 @@ class PocketBaseApi(
         }
 
         val projectFilter = projectRecords.joinToString(" || ") { "project = \"${it.id}\"" }
+        val activeTaskFilter = "($projectFilter) && archived = false"
         val states = async {
             listAll<BoardStateRecord>(server, token, "board_project_states", projectFilter, "sort_order")
         }
         val tasks = async {
-            listAll<BoardTaskRecord>(server, token, "board_tasks", projectFilter, "rank")
+            listAll<BoardTaskRecord>(server, token, "board_tasks", activeTaskFilter, "rank")
         }
         val labels = async {
             listAll<BoardLabelRecord>(server, token, "board_project_labels", projectFilter, "name")
@@ -1042,13 +1043,19 @@ class PocketBaseApi(
      * board-task deadlines loaded concurrently, plus the workspace timezone
      * from /api/configs/system (applied to every event).
      */
-    suspend fun getCalendarSnapshot(server: String, token: String): CalendarSnapshot = coroutineScope {
+    suspend fun getCalendarSnapshot(
+        server: String,
+        token: String,
+        userId: String,
+    ): CalendarSnapshot = coroutineScope {
         val eventsDeferred = async {
             listAll<CalendarEvent>(server, token, "calendar_events", "", "start_at")
         }
         val tasksDeferred = async {
             listAll<CalendarTaskDeadline>(
-                server, token, "board_tasks", "due_date != \"\"", "due_date", expand = "project,state",
+                server, token, "board_tasks",
+                "due_date != \"\" && archived = false && assignees ?= \"$userId\"",
+                "due_date", expand = "project,state",
             )
         }
         val configDeferred = async {

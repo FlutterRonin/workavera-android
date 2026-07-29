@@ -19,7 +19,7 @@ class CalendarRepository(
             ?: throw ApiException(401, "Your session is no longer available. Sign in again.")
 
     private val cacheKey: String
-        get() = "calendar|${session.server}|${session.user.id}"
+        get() = "calendar:v2|${session.server}|${session.user.id}"
 
     /** Cached snapshot rendered first when entering the screen; null when absent. */
     fun cachedSnapshot(): CalendarSnapshot? =
@@ -27,7 +27,11 @@ class CalendarRepository(
 
     /** Network load, writing through to the disk cache on success. */
     suspend fun loadSnapshot(): CalendarSnapshot {
-        val snapshot = api.getCalendarSnapshot(session.server, session.token)
+        val snapshot = api.getCalendarSnapshot(
+            session.server,
+            session.token,
+            session.user.id,
+        )
         cache.write(cacheKey, CalendarSnapshot.serializer(), snapshot)
         return snapshot
     }
