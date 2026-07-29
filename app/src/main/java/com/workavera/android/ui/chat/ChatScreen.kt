@@ -71,6 +71,7 @@ import com.workavera.android.ui.settings.FormTextField
 class ChatTopBarState {
     var createRequests by mutableStateOf(0)
         private set
+    private var consumedCreateRequests = 0
     var showArchived by mutableStateOf(false)
 
     /**
@@ -81,6 +82,12 @@ class ChatTopBarState {
 
     fun requestCreate() {
         createRequests++
+    }
+
+    fun consumeCreateRequest(): Boolean {
+        if (consumedCreateRequests == createRequests) return false
+        consumedCreateRequests = createRequests
+        return true
     }
 }
 
@@ -106,7 +113,7 @@ fun ChatScreen(
         searchInput = viewModel.uiState.query
     }
     LaunchedEffect(topBarState.createRequests) {
-        if (topBarState.createRequests == 0) return@LaunchedEffect
+        if (!topBarState.consumeCreateRequest()) return@LaunchedEffect
         searchInput = ""
         viewModel.create { created -> openConversationId = created.id }
     }

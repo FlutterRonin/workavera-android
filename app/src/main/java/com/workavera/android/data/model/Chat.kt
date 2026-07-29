@@ -206,7 +206,27 @@ data class ChatStreamChunk(
     val finishReason: String? = null,
     val messageMetadata: ChatMessageMetadata? = null,
     val data: JsonElement? = null,
-)
+) {
+    /**
+     * Whether this chunk must bypass the UI stream throttle. Tool lifecycle
+     * boundaries are sparse and can be followed by a long execution pause, so
+     * delaying one can hide the pending card until the result arrives. Tool
+     * input deltas remain throttled because they may arrive for every token.
+     */
+    val requiresImmediateRender: Boolean
+        get() = when (type) {
+            "tool-input-start",
+            "tool-input-available",
+            "tool-input-error",
+            "tool-approval-request",
+            "tool-approval-response",
+            "tool-output-available",
+            "tool-output-error",
+            "tool-output-denied",
+            -> true
+            else -> type.startsWith("data-")
+        }
+}
 
 /**
  * Pure state machine that builds an assistant [ChatMessage] from stream chunks.

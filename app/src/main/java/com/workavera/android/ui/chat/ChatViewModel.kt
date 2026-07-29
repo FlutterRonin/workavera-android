@@ -582,16 +582,11 @@ class ChatViewModel(
                         throw CancellationException("The run is no longer active.")
                     }
                     reducer.apply(chunk)
-                    // An approval request is exempt from the throttle. The
-                    // server blocks on the user's decision, so it is the last
-                    // chunk to arrive until they answer: throttling it away
-                    // would leave the card showing the previous state with no
-                    // buttons, and no later chunk would ever come to flush it.
-                    // The data part carrying the approval payload is exempt for
-                    // the same reason — the buttons need its approvalId.
-                    val mustRender =
-                        chunk.type == "tool-approval-request" ||
-                            chunk.type.startsWith("data-")
+                    // Tool state boundaries are exempt because execution can
+                    // leave no later chunk to flush a skipped pending card.
+                    // High-frequency text, reasoning, and tool-input deltas
+                    // still pass through the throttle.
+                    val mustRender = chunk.requiresImmediateRender
                     val now = System.currentTimeMillis()
                     if (!mustRender &&
                         lastFlushAt != 0L &&
