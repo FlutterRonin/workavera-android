@@ -1,7 +1,11 @@
 package com.workavera.android.ui.docs
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -15,19 +19,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.workavera.android.data.model.DocumentKind
-import com.workavera.android.data.model.DocumentStatus
 import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.WorkspaceDocument
 import com.workavera.android.ui.components.ErrorBanner
@@ -59,12 +59,9 @@ import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.MarkdownContent
 import com.workavera.android.ui.notifications.RelativeTime
 
-/** One-time warning color, matching the iOS .orange accents. */
-private val WarningOrange = androidx.compose.ui.graphics.Color(0xFFFF9500)
-
 /**
- * Full-screen document reader (iOS DocumentDetailView): header meta, markdown
- * rendered to styled HTML, HTML documents shown as-is, plus version history.
+ * Full-screen document reader (iOS DocumentDetailView): markdown rendered to
+ * styled HTML, HTML documents shown as-is, plus version history.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,7 +105,7 @@ internal fun DocumentDetailDialog(
             ) { padding ->
                 Box(modifier = Modifier.fillMaxSize().padding(padding)) {
                     when {
-                        document != null -> DocumentContent(document = document, viewModel = viewModel)
+                        document != null -> DocumentContent(document = document)
                         isLoading -> LoadingIndicator("Loading document…")
                         else -> UnavailableDocument(
                             error = viewModel.uiState.error,
@@ -130,85 +127,43 @@ internal fun DocumentDetailDialog(
 }
 
 @Composable
-private fun DocumentContent(document: WorkspaceDocument, viewModel: DocsViewModel) {
+private fun DocumentContent(document: WorkspaceDocument) {
     val isDark = isSystemInDarkTheme()
-    Column(modifier = Modifier.fillMaxSize()) {
+    // The body gets the whole screen and scrolls itself: metadata above it takes
+    // away screen the document needs, and a page with sticky elements of its own
+    // is left scrolling inside a strip.
+    if (document.content.isBlank()) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(top = 16.dp, bottom = 20.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 50.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (document.documentKind == DocumentKind.HTML) "HTML" else "MARKDOWN",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-                if (document.documentStatus == DocumentStatus.ARCHIVED) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "ARCHIVED",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = WarningOrange,
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
+            Icon(
+                Icons.Outlined.Description,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
             Text(
-                text = "${viewModel.locationName(document.projectId, document.folderId)} · " +
-                    "Version ${document.revision}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (document.updatedAt != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Updated ${RelativeTime.format(document.updated)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        if (document.content.isBlank()) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 50.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    Icons.Outlined.Description,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = "Empty Document",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        } else if (document.documentKind == DocumentKind.HTML) {
-            HtmlDocumentView(
-                html = document.content,
-                isDark = isDark,
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            MarkdownContent(
-                content = document.content,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+                text = "Empty Document",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
             )
         }
+    } else if (document.documentKind == DocumentKind.HTML) {
+        HtmlDocumentView(
+            html = document.content,
+            isDark = isDark,
+            modifier = Modifier.fillMaxSize(),
+        )
+    } else {
+        MarkdownContent(
+            content = document.content,
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+        )
     }
 }
 
@@ -389,7 +344,15 @@ private fun DocumentVersionDetailDialog(
     }
 }
 
-/** Styled WebView for HTML document bodies; dark/light aware, JavaScript disabled. */
+/**
+ * Styled WebView for HTML document bodies; dark/light aware. It fills the screen
+ * and scrolls itself, so a document with sticky elements of its own has a full
+ * viewport to lay them out against. Scripts run, the way they do in the web
+ * app's sandboxed iframe and in the iOS HTMLView, because documents commonly
+ * build their content in one: a document loaded without them renders its static
+ * shell and nothing else. The null base URL leaves the page on an opaque origin,
+ * so a document cannot reach the app's own data.
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun HtmlDocumentView(html: String, isDark: Boolean, modifier: Modifier = Modifier) {
@@ -397,16 +360,49 @@ private fun HtmlDocumentView(html: String, isDark: Boolean, modifier: Modifier =
     androidx.compose.ui.viewinterop.AndroidView(
         factory = { context ->
             WebView(context).apply {
-                settings.javaScriptEnabled = false
+                settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
+                // Both default to true below API 30, and a document has no
+                // reason to read local files.
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                webViewClient = HtmlDocumentClient(context)
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
             }
         },
         update = { webView ->
-            webView.loadDataWithBaseURL(null, page, "text/html", "utf-8", null)
+            // Reload only for a different document: update runs on every
+            // recomposition, and reloading would drop the reader's position and
+            // whatever state the document's own scripts hold.
+            if (webView.tag != page) {
+                webView.tag = page
+                webView.loadDataWithBaseURL(null, page, "text/html", "utf-8", null)
+            }
         },
         modifier = modifier,
     )
+}
+
+/**
+ * Keeps the WebView on the document: a tapped http(s) link opens in the browser,
+ * in-document anchors scroll, and everything else — including navigation a
+ * script starts without a tap — is dropped.
+ */
+private class HtmlDocumentClient(private val context: Context) : WebViewClient() {
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        val url = request.url
+        // The document is loaded without a base URL, so its own anchors stay on
+        // about:blank and the WebView can handle them itself.
+        if (url.scheme == "about") return false
+        if (request.hasGesture() && (url.scheme == "http" || url.scheme == "https")) {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
+        return true
+    }
 }
 
 /** Wraps body HTML in a minimal document with readable, theme-aware typography. */

@@ -12,6 +12,16 @@ Server-side changes are recorded separately, in the
 
 ### Fixed
 
+- HTML documents now run their own scripts, as they already do on the web and
+  on iOS. A document that builds its content in one showed only its static
+  shell — a heading and an empty page where its cards should be. A tapped
+  link opens in the browser, while navigation a document starts on its own is
+  refused.
+- A document body now fills the screen and scrolls on its own. The metadata
+  header above it is gone, so a document with sticky elements of its own is
+  no longer left scrolling inside a strip. Reaching a document no longer
+  reloads it on every recomposition, which used to drop the reading position
+  and any state its scripts held.
 - A conversation list reordered after pinning or restoring now uses the same
   order as the server: pinned first, then by latest message, then by last
   edit. A locally reordered list no longer disagrees with the next refresh.
