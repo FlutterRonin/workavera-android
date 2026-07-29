@@ -22,6 +22,9 @@ Server-side changes are recorded separately, in the
   no longer left scrolling inside a strip. Reaching a document no longer
   reloads it on every recomposition, which used to drop the reading position
   and any state its scripts held.
+- An HTML document no longer sits inside a wide gutter. The reader added a
+  horizontal inset of its own on top of the padding a document brings, which
+  iOS never did.
 - A conversation list reordered after pinning or restoring now uses the same
   order as the server: pinned first, then by latest message, then by last
   edit. A locally reordered list no longer disagrees with the next refresh.

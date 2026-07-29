@@ -420,7 +420,9 @@ private fun wrapHtml(body: String, isDark: Boolean): String {
           body {
             font-family: -apple-system, Roboto, sans-serif;
             font-size: 15px; line-height: 1.65;
-            color: $textColor; margin: 0; padding: 4px 20px 32px 20px;
+            /* No inset of our own, as on iOS: a document brings its own
+               padding, and adding to it left a wide gutter down both sides. */
+            color: $textColor; margin: 0; padding: 0;
             word-wrap: break-word;
           }
           h1, h2, h3, h4 { line-height: 1.3; margin: 1.2em 0 0.5em; }
