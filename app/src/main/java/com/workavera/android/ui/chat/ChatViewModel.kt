@@ -808,11 +808,16 @@ class ChatViewModel(
         private fun pageCount(totalItems: Int, pageSize: Int): Int =
             maxOf(1, (totalItems + pageSize - 1) / pageSize)
 
-        /** Pinned first, then most recently updated/created (iOS activeSort). */
-        private val activeSort =
+        /**
+         * Mirrors the server list order ("-pinned,-last_message_at,-updated"), so a
+         * list reordered after a local mutation matches the next page the server
+         * returns. A conversation without a last_message_at sorts below every dated
+         * one, the way an empty date does on the server (iOS activeSort).
+         */
+        internal val activeSort =
             compareByDescending<ChatConversation> { it.pinned }
+                .thenByDescending { it.lastMessageAtDate ?: Instant.EPOCH }
                 .thenByDescending { it.updatedAt ?: Instant.EPOCH }
-                .thenByDescending { it.createdAt ?: Instant.EPOCH }
 
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
