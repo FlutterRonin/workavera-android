@@ -27,7 +27,7 @@ android {
         applicationId = "com.workavera.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
+        versionCode = 5
         // Read from the VERSION file rather than repeated here, so the number
         // the app reports and the one the release artifact is named after
         // cannot drift apart.
