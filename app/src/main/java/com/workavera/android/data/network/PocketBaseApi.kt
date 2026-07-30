@@ -1067,7 +1067,7 @@ class PocketBaseApi(
         val tasksDeferred = async {
             listAll<CalendarTaskDeadline>(
                 server, token, "board_tasks",
-                "due_date != \"\" && archived = false && assignees.id ?= \"$userId\"",
+                "state.category != \"completed\" && due_date != \"\" && archived = false && assignees.id ?= \"$userId\"",
                 "due_date", expand = "project,state",
             )
         }
