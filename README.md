@@ -4,6 +4,11 @@ The Android client for Workavera (Kotlin + Jetpack Compose), connecting to a
 self-hosted [Workavera](https://github.com/xusenlin/workavera) server
 (PocketBase). The module structure mirrors the Web / iOS apps.
 
+**This version needs a Workavera server on 0.0.10 or newer**, because task
+archiving reads a field added in that release. Upgrade the server first. The
+[server README](https://github.com/xusenlin/workavera#server-compatibility)
+carries the full version table.
+
 ## Current status (0.1.0 preview)
 
 - ✅ Sign in: email + password (`auth-with-password`), configurable server

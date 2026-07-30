@@ -10,6 +10,11 @@ Server-side changes are recorded separately, in the
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-30
+
+Needs a Workavera server on 0.0.10 or newer: task archiving reads a field that
+release adds. Upgrade the server first.
+
 ### Fixed
 
 - HTML documents now run their own scripts, as they already do on the web and
@@ -82,5 +87,6 @@ Server-side changes are recorded separately, in the
   blocks on the answer, so it is exempt from the throttle.
 - Approval tool cards stay expanded while a decision is pending.
 
-[Unreleased]: https://github.com/xusenlin/workavera-android/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera-android/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/xusenlin/workavera-android/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/xusenlin/workavera-android/releases/tag/v1.0.1
