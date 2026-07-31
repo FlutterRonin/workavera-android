@@ -1,5 +1,6 @@
 package com.workavera.android.data
 
+import com.workavera.android.data.model.ArchivedBoardTaskPage
 import com.workavera.android.data.model.BoardPage
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.network.ApiException
@@ -42,7 +43,18 @@ class BoardRepository(
         api.updateBoardTaskDueDate(session.server, session.token, id, dueDate)
 
     suspend fun archiveTask(id: String) =
-        api.archiveBoardTask(session.server, session.token, id)
+        api.setBoardTaskArchived(session.server, session.token, id, archived = true)
+
+    suspend fun restoreTask(id: String) =
+        api.setBoardTaskArchived(session.server, session.token, id, archived = false)
+
+    /** One page of a project's archived tasks; page is 1-based. */
+    suspend fun loadArchivedTasks(
+        projectId: String,
+        page: Int,
+        pageSize: Int,
+    ): ArchivedBoardTaskPage =
+        api.getArchivedBoardTasks(session.server, session.token, projectId, page, pageSize)
 
     /** Board realtime signal stream (payloads ignored; refresh trigger only). */
     fun realtimeSignals(): Flow<Unit> =

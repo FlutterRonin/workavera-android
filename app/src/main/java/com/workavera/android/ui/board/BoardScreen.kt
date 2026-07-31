@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.ViewKanban
 import androidx.compose.material3.Card
@@ -68,6 +69,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.workavera.android.data.AuthState
+import com.workavera.android.data.model.ArchivedBoardTask
 import com.workavera.android.data.model.BoardLabel
 import com.workavera.android.data.model.BoardMember
 import com.workavera.android.data.model.BoardProject
@@ -100,6 +102,16 @@ private val dueDateLongFormat =
     DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
 
 /**
+ * Board top-bar action (iOS toolbar archivebox); the archived-tasks sheet it
+ * opens is rendered inside BoardScreen, which also reports whether a project
+ * is selected so the scaffold can disable the action.
+ */
+class BoardTopBarState {
+    var showArchived by mutableStateOf(false)
+    var hasProject by mutableStateOf(false)
+}
+
+/**
  * Board screen, laid out like the mobile form of the iOS BoardView: project
  * card → state chips → single-column task list. A task's state / priority /
  * due date are edited in the detail bottom sheet (iOS likewise has no drag &
@@ -107,7 +119,10 @@ private val dueDateLongFormat =
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardScreen(state: AuthState.LoggedIn) {
+fun BoardScreen(
+    state: AuthState.LoggedIn,
+    topBarState: BoardTopBarState = remember { BoardTopBarState() },
+) {
     val boardViewModel: BoardViewModel =
         viewModel(key = state.user.id, factory = BoardViewModel.Factory)
     val ui = boardViewModel.uiState
@@ -122,6 +137,11 @@ fun BoardScreen(state: AuthState.LoggedIn) {
     val project = boardViewModel.selectedProject
     val selectedState = project?.states?.firstOrNull { it.id == ui.selectedStateId }
         ?: project?.states?.firstOrNull()
+    LaunchedEffect(project?.id) {
+        topBarState.hasProject = project != null
+        // Leaving the sheet open across a project switch would show the wrong list.
+        if (project == null) topBarState.showArchived = false
+    }
     val selectedTask = selectedTaskId?.let { id ->
         ui.projects.flatMap { it.states }.flatMap { it.tasks }.firstOrNull { it.id == id }
     }
@@ -199,6 +219,16 @@ fun BoardScreen(state: AuthState.LoggedIn) {
             },
             onPageChange = boardViewModel::loadPage,
             onDismiss = { showProjectSwitcher = false },
+        )
+    }
+
+    if (topBarState.showArchived && project != null) {
+        ArchivedTasksSheet(
+            ui = ui,
+            project = project,
+            onLoad = { page -> boardViewModel.loadArchivedTasks(project.id, page) },
+            onRestore = { boardViewModel.restoreTask(it) },
+            onDismiss = { topBarState.showArchived = false },
         )
     }
 
@@ -645,6 +675,148 @@ private fun ProjectSwitcherSheet(
             onPageChange = onPageChange,
         )
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/** Archived-tasks bottom sheet for the current project, mirroring the iOS ArchivedTasksSheet. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ArchivedTasksSheet(
+    ui: BoardUiState,
+    project: BoardProject,
+    onLoad: (Int?) -> Unit,
+    onRestore: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    LaunchedEffect(project.id) { onLoad(null) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.padding(bottom = 24.dp)) {
+            // Two-line title naming the project the list belongs to.
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                Text(
+                    text = "Archived Tasks",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = project.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (ui.archivedError != null) {
+                ErrorBanner(
+                    message = ui.archivedError,
+                    onRetry = { onLoad(null) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            if (!ui.hasLoadedArchived && ui.isLoadingArchived) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            } else if (ui.archivedTasks.isEmpty()) {
+                Text(
+                    text = "Tasks you archive appear here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f, fill = false),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    items(ui.archivedTasks, key = { it.id }) { task ->
+                        ArchivedTaskRow(
+                            task = task,
+                            isRestoring = task.id in ui.restoringTaskIds,
+                            enabled = ui.restoringTaskIds.isEmpty(),
+                            onRestore = { onRestore(task.id) },
+                        )
+                    }
+                    if (ui.archivedTotalItems > 0) {
+                        item {
+                            PaginationBar(
+                                page = ui.archivedPage,
+                                totalPages = ui.archivedTotalPages,
+                                onPageChange = { onLoad(it) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchivedTaskRow(
+    task: ArchivedBoardTask,
+    isRestoring: Boolean,
+    enabled: Boolean,
+    onRestore: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = CardBorder,
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, top = 10.dp, end = 6.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(2.dp))
+                // The state a restored task returns to, plus its description when it has one.
+                val state = task.stateName.ifEmpty { "Original state" }
+                Text(
+                    text = if (task.description.isEmpty()) state else "$state · ${task.description}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            if (isRestoring) {
+                Box(
+                    modifier = Modifier.size(48.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
+            } else {
+                IconButton(onClick = onRestore, enabled = enabled) {
+                    Icon(
+                        Icons.Outlined.Unarchive,
+                        contentDescription = "Restore ${task.title}",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
     }
 }
 

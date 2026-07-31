@@ -19,6 +19,8 @@ import com.workavera.android.data.model.ContactFavoriteRecord
 import com.workavera.android.data.model.ContactsSnapshot
 import com.workavera.android.data.model.CreatedApiKey
 import com.workavera.android.data.model.AppNotification
+import com.workavera.android.data.model.ArchivedBoardTask
+import com.workavera.android.data.model.ArchivedBoardTaskPage
 import com.workavera.android.data.model.BoardLabel
 import com.workavera.android.data.model.BoardMember
 import com.workavera.android.data.model.BoardPage
@@ -810,6 +812,17 @@ class PocketBaseApi(
     )
 
     @Serializable
+    private data class ArchivedBoardTaskRecord(
+        val id: String,
+        val title: String = "",
+        val description: String = "",
+        val expand: Expansion? = null,
+    ) {
+        @Serializable
+        data class Expansion(val state: BoardStateRecord? = null)
+    }
+
+    @Serializable
     private data class MoveTaskPayload(val state: String, val rank: Double)
 
     @Serializable
@@ -1039,14 +1052,53 @@ class PocketBaseApi(
         setBody(TaskDueDatePayload(dueDate = dueDate?.let(::formatServerInstant) ?: ""))
     }
 
-    suspend fun archiveBoardTask(
+    suspend fun setBoardTaskArchived(
         server: String,
         token: String,
         id: String,
+        archived: Boolean,
     ) = requestEmpty(server, "api/collections/board_tasks/records/$id", HttpMethod.Patch) {
         header(HttpHeaders.Authorization, token)
         contentType(ContentType.Application.Json)
-        setBody(ArchiveTaskPayload(archived = true))
+        setBody(ArchiveTaskPayload(archived = archived))
+    }
+
+    /**
+     * Archived tasks of one project, newest first. They are excluded from
+     * [getBoardPage], so the sheet listing them pages on its own.
+     */
+    suspend fun getArchivedBoardTasks(
+        server: String,
+        token: String,
+        projectId: String,
+        page: Int,
+        pageSize: Int,
+    ): ArchivedBoardTaskPage {
+        val response = request<RecordListResponse<ArchivedBoardTaskRecord>>(
+            server,
+            "api/collections/board_tasks/records",
+            HttpMethod.Get,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            parameter("page", page.toString())
+            parameter("perPage", pageSize.toString())
+            parameter("sort", "-updated")
+            parameter("expand", "state")
+            parameter("filter", "project = \"$projectId\" && archived = true")
+        }
+        return ArchivedBoardTaskPage(
+            tasks = response.items.map { record ->
+                ArchivedBoardTask(
+                    id = record.id,
+                    title = record.title,
+                    description = record.description,
+                    stateName = record.expand?.state?.name.orEmpty(),
+                )
+            },
+            page = response.page,
+            totalPages = maxOf(1, response.totalPages),
+            totalItems = response.totalItems ?: 0,
+        )
     }
 
     // ---- Calendar (events + task deadlines + timezone) ----

@@ -10,6 +10,13 @@ Server-side changes are recorded separately, in the
 
 ## [Unreleased]
 
+### Added
+
+- Board carries an archive button in its top bar, opening the archived tasks
+  of the project named in the panel's title. Each task lists the state it
+  would return to and restores from there, so one archived by mistake is no
+  longer out of reach on the phone.
+
 ### Fixed
 
 - Calendar shows unfinished Board task deadlines assigned to the signed-in

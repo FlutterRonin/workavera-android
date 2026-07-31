@@ -111,6 +111,25 @@ data class BoardPage(
     val totalItems: Int,
 )
 
+/**
+ * One archived task, as listed in the Board's archived-tasks sheet. Archived
+ * tasks are excluded from [BoardPage], so they carry only what the list shows.
+ */
+data class ArchivedBoardTask(
+    val id: String,
+    val title: String,
+    val description: String,
+    val stateName: String,
+)
+
+/** Archived-task page result (page is PocketBase's 1-based page number). */
+data class ArchivedBoardTaskPage(
+    val tasks: List<ArchivedBoardTask>,
+    val page: Int,
+    val totalPages: Int,
+    val totalItems: Int,
+)
+
 private val pocketBaseDateFormat =
     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
 

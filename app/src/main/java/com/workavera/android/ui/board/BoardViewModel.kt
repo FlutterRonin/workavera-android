@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.workavera.android.WorkaveraApplication
 import com.workavera.android.data.BoardRepository
+import com.workavera.android.data.model.ArchivedBoardTask
 import com.workavera.android.data.model.BoardProject
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.TaskPriority
@@ -34,6 +35,16 @@ data class BoardUiState(
     val error: String? = null,
     /** Ids of tasks being moved / reprioritized / re-dated, for inline loading. */
     val updatingTaskIds: Set<String> = emptySet(),
+    /** Archived tasks of [archivedProjectId], paged separately from the board itself. */
+    val archivedTasks: List<ArchivedBoardTask> = emptyList(),
+    val archivedProjectId: String? = null,
+    val archivedPage: Int = 0,
+    val archivedTotalPages: Int = 1,
+    val archivedTotalItems: Int = 0,
+    val isLoadingArchived: Boolean = false,
+    val hasLoadedArchived: Boolean = false,
+    val archivedError: String? = null,
+    val restoringTaskIds: Set<String> = emptySet(),
 )
 
 /**
@@ -239,6 +250,88 @@ class BoardViewModel(
         }
     }
 
+    /**
+     * Loads one page of a project's archived tasks. Switching projects starts
+     * the list over rather than paging into the previous project's results.
+     */
+    fun loadArchivedTasks(projectId: String, requestedPage: Int? = null) {
+        if (uiState.isLoadingArchived) return
+        val restart = uiState.archivedProjectId != projectId
+        if (restart) uiState = uiState.copy(archivedProjectId = projectId).clearArchivedList()
+        val target = (requestedPage ?: if (restart) 0 else uiState.archivedPage).coerceAtLeast(0)
+
+        viewModelScope.launch {
+            uiState = uiState.copy(isLoadingArchived = true)
+            try {
+                val loaded = repository.loadArchivedTasks(
+                    projectId,
+                    target + 1,
+                    ARCHIVED_TASKS_PER_PAGE,
+                )
+                uiState = uiState.copy(
+                    archivedTasks = loaded.tasks,
+                    archivedPage = loaded.page - 1,
+                    archivedTotalPages = loaded.totalPages,
+                    archivedTotalItems = loaded.totalItems,
+                    isLoadingArchived = false,
+                    hasLoadedArchived = true,
+                    archivedError = null,
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    isLoadingArchived = false,
+                    hasLoadedArchived = true,
+                    archivedError = errorMessage(e, "Could not load the archived tasks."),
+                )
+            }
+        }
+    }
+
+    /**
+     * Restores an archived task to the state it was archived from, then
+     * reloads both the archived list and the board it reappears on.
+     */
+    fun restoreTask(taskId: String, onComplete: (Boolean) -> Unit = {}) {
+        val projectId = uiState.archivedProjectId ?: return
+        if (taskId in uiState.restoringTaskIds) return
+
+        uiState = uiState.copy(restoringTaskIds = uiState.restoringTaskIds + taskId)
+        viewModelScope.launch {
+            try {
+                repository.restoreTask(taskId)
+                uiState = uiState.copy(restoringTaskIds = uiState.restoringTaskIds - taskId)
+                // Step back a page when the last remaining entry on it was restored.
+                val nextPage = if (uiState.archivedTasks.size == 1) {
+                    (uiState.archivedPage - 1).coerceAtLeast(0)
+                } else {
+                    uiState.archivedPage
+                }
+                loadArchivedTasks(projectId, requestedPage = nextPage)
+                refresh()
+                onComplete(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    restoringTaskIds = uiState.restoringTaskIds - taskId,
+                    archivedError = errorMessage(e, "Could not restore the task."),
+                )
+                onComplete(false)
+            }
+        }
+    }
+
+    private fun BoardUiState.clearArchivedList() = copy(
+        archivedTasks = emptyList(),
+        archivedPage = 0,
+        archivedTotalPages = 1,
+        archivedTotalItems = 0,
+        hasLoadedArchived = false,
+        archivedError = null,
+    )
+
     /** Realtime signal loop: a suspend function started from a LaunchedEffect; cancelled automatically on leaving the board. */
     suspend fun listenForRealtimeSignals() {
         var backoffMs = 1_000L
@@ -328,6 +421,9 @@ class BoardViewModel(
     companion object {
         /** Matches iOS: 4 projects per page. */
         const val PROJECTS_PER_PAGE = 4
+
+        /** Matches iOS: 10 archived tasks per page. */
+        const val ARCHIVED_TASKS_PER_PAGE = 10
 
         /** Rank step for append-to-end, matching iOS. */
         const val RANK_GAP = 1024.0

@@ -64,6 +64,7 @@ import com.workavera.android.data.AuthState
 import com.workavera.android.ui.AppSection
 import com.workavera.android.ui.AuthViewModel
 import com.workavera.android.ui.board.BoardScreen
+import com.workavera.android.ui.board.BoardTopBarState
 import com.workavera.android.ui.calendar.CalendarScreen
 import com.workavera.android.ui.calendar.CalendarTopBarState
 import com.workavera.android.ui.chat.ChatScreen
@@ -199,6 +200,9 @@ private fun HomeContent(
     // user id like Reading so switching accounts rebuilds its state.
     val contactsViewModel: ContactsViewModel =
         viewModel(key = "contacts:${state.user.id}", factory = ContactsViewModel.Factory)
+    // Board top-bar action (iOS toolbar archivebox); the archived-tasks sheet
+    // it opens lives in BoardScreen, which owns the board ViewModel.
+    val boardTopBar = remember { BoardTopBarState() }
     // App-wide realtime subscription: the LaunchedEffect follows the signed-in
     // state, so signing out (leaving composition) disconnects the SSE stream.
     LaunchedEffect(state.user.id) {
@@ -282,6 +286,16 @@ private fun HomeContent(
                         IconButton(onClick = { readingTopBar.requestAdd() }) {
                             Icon(Icons.Filled.Add, contentDescription = "Add reading item")
                         }
+                    } else if (currentSection == AppSection.BOARD) {
+                        IconButton(
+                            onClick = { boardTopBar.showArchived = true },
+                            enabled = boardTopBar.hasProject,
+                        ) {
+                            Icon(
+                                Icons.Outlined.Archive,
+                                contentDescription = "Archived tasks",
+                            )
+                        }
                     } else if (currentSection == AppSection.DASHBOARD) {
                         IconButton(onClick = { onOpenSection(AppSection.NOTIFICATIONS) }) {
                             BadgedBox(
@@ -318,7 +332,7 @@ private fun HomeContent(
                         AppSection.PROFILE -> ProfileScreen(state, viewModel, profileTopBar)
                         AppSection.SETTINGS -> SettingsScreen(state, viewModel)
                         AppSection.NOTIFICATIONS -> NotificationsScreen(notificationViewModel)
-                        AppSection.BOARD -> BoardScreen(state)
+                        AppSection.BOARD -> BoardScreen(state, boardTopBar)
                         AppSection.CALENDAR -> CalendarScreen(calendarTopBar)
                         AppSection.DOCS -> DocsScreen()
                         AppSection.READING -> ReadingScreen(readingViewModel, readingTopBar)
