@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Workavera 机器人 logo：亮色主题为深墨色实体 + 浅色眼睛（对应 iOS logo-light.svg）。 -->
+    <!-- Workavera logo：亮色主题为深墨色笔画（对应 iOS logo-light.svg）。 -->
     <color name="logo_body">#1A1A1A</color>
-    <color name="logo_eye">#FFFFFF</color>
 </resources>

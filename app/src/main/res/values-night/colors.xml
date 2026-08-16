@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 暗色主题为浅色实体 + 深色眼睛（对应 iOS logo-dark.svg）。 -->
+    <!-- 暗色主题为浅色笔画（对应 iOS logo-dark.svg）。 -->
     <color name="logo_body">#FAFAFA</color>
-    <color name="logo_eye">#1C1C1E</color>
 </resources>
