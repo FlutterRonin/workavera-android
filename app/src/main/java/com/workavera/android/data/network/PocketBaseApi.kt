@@ -33,6 +33,7 @@ import com.workavera.android.data.model.DocsPage
 import com.workavera.android.data.model.DocsViewFilter
 import com.workavera.android.data.model.DocumentFolder
 import com.workavera.android.data.model.DocumentProject
+import com.workavera.android.data.model.DocumentShare
 import com.workavera.android.data.model.DocumentSummary
 import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.LlmModel
@@ -1227,6 +1228,9 @@ class PocketBaseApi(
     @Serializable
     private data class DocumentPinPayload(val pinned: Boolean)
 
+    @Serializable
+    private data class DocumentSharePayload(val expires: String, val republish: Boolean)
+
     /**
      * Docs page load, matching the iOS getDocsPage: pinned ids + folders +
      * projects concurrently with the (paged) documents list; the Pinned view
@@ -1376,6 +1380,53 @@ class PocketBaseApi(
 
     suspend fun deleteDocument(server: String, token: String, id: String) =
         requestEmpty(server, "api/docs/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /**
+     * The public link of a document, or null when it has none: the endpoint
+     * answers a bare `null` instead of a 404, so "not shared" is a state rather
+     * than a failure and cannot be confused with a missing document.
+     */
+    suspend fun getDocumentShare(server: String, token: String, id: String): DocumentShare? {
+        val response = send(server, "api/docs/$id/share", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+        val body = response.bodyAsText().trim()
+        if (body.isEmpty() || body == "null") return null
+        return try {
+            json.decodeFromString(DocumentShare.serializer(), body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException(
+                statusCode = response.status.value,
+                message = "The server returned data this version of Workavera could not read.",
+                cause = e,
+            )
+        }
+    }
+
+    /**
+     * Publishes the document, or updates the link it already has. [republish]
+     * moves the link to the document's current revision; without it only the
+     * expiry changes, so adjusting a date can never expose an unfinished draft.
+     */
+    suspend fun publishDocument(
+        server: String,
+        token: String,
+        id: String,
+        expires: String,
+        republish: Boolean,
+    ): DocumentShare =
+        request(server, "api/docs/$id/share", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(DocumentSharePayload(expires, republish))
+        }
+
+    suspend fun unpublishDocument(server: String, token: String, id: String) =
+        requestEmpty(server, "api/docs/$id/share", HttpMethod.Delete) {
             header(HttpHeaders.Authorization, token)
         }
 

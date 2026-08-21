@@ -1,6 +1,8 @@
 package com.workavera.android.data.model
 
+import com.workavera.android.data.network.PocketBaseApi
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import kotlinx.serialization.Serializable
 
 /** Document body format, matching the iOS DocumentKind. */
@@ -94,6 +96,39 @@ data class WorkspaceDocument(
     val documentStatus: DocumentStatus get() = DocumentStatus.fromRaw(status)
     val createdAt: Instant? get() = parseServerDate(created)
     val updatedAt: Instant? get() = parseServerDate(updated)
+}
+
+/**
+ * A document's public link, matching the iOS DocumentShare. [revision] is the
+ * snapshot the link serves, which stays where it is while the document is
+ * edited; an empty [expires] means the link never expires.
+ */
+@Serializable
+data class DocumentShare(
+    val docId: String = "",
+    val slug: String = "",
+    val revision: Int = 0,
+    val expires: String = "",
+    val created: String = "",
+    val updated: String = "",
+) {
+    val expiresAt: Instant? get() = if (expires.isEmpty()) null else parseServerDate(expires)
+}
+
+/** Expiry choices offered when publishing, matching the iOS DocumentShareExpiry. */
+enum class DocumentShareExpiry(val label: String, val days: Int?) {
+    /** Leaves an existing expiry untouched while other fields change. */
+    KEEP("Keep current expiry", null),
+    NEVER("No expiry", null),
+    SEVEN_DAYS("7 days from now", 7),
+    THIRTY_DAYS("30 days from now", 30);
+
+    /** Expiry for the request body; an empty string means "never expires". */
+    fun requestValue(share: DocumentShare?, now: Instant = Instant.now()): String {
+        if (this == KEEP) return share?.expires.orEmpty()
+        val dayCount = days ?: return ""
+        return PocketBaseApi.formatServerInstant(now.plus(dayCount.toLong(), ChronoUnit.DAYS))
+    }
 }
 
 /** One saved revision of a document, matching the iOS DocumentVersion. */

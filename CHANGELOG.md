@@ -10,6 +10,33 @@ Server-side changes are recorded separately, in the
 
 ## [Unreleased]
 
+Needs a Workavera server on 0.1.0 or newer: public document links are served by
+endpoints that release adds. Upgrade the server first.
+
+### Added
+
+- A document you own carries a share button in its top bar, publishing it to a
+  link anyone can open in a browser without an account, with no expiry or one
+  7 or 30 days out. The link serves the revision you publish and stays on it
+  while you keep editing, so a draft is never exposed by accident; "Publish
+  latest" moves it forward and "Revoke link" takes it out of service for good.
+  Archived documents have no share button, because archiving already makes
+  their link unavailable.
+
+### Changed
+
+- A markdown document reads at the web reader's type scale: headings that open
+  a section, blocks packed tight and carried by a generous line height, the
+  editor's list indent, and quotes marked by a bar rather than italics. The
+  renderer's defaults are tuned for chat-sized messages, which left document
+  headings barely larger than the text they introduced. Chat is unchanged.
+  Headings 1 and 2 sit below the web scale on purpose: 3em and 2em are set for
+  a wide column and leave a phone title a few characters to a line.
+- A table in a document wraps its cells instead of cutting each to one line.
+  A cell reading "破坏交叉编译和 C…" never told you it meant `CGO_ENABLED=0`,
+  and nothing on the screen could reach the rest. Two and three column tables
+  now share the width and wrap; wider ones still scroll sideways.
+
 ## [1.0.3] - 2026-08-04
 
 ### Added

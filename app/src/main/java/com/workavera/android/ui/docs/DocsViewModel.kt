@@ -14,6 +14,7 @@ import com.workavera.android.data.DocsRepository
 import com.workavera.android.data.model.DocsViewFilter
 import com.workavera.android.data.model.DocumentFolder
 import com.workavera.android.data.model.DocumentProject
+import com.workavera.android.data.model.DocumentShare
 import com.workavera.android.data.model.DocumentSummary
 import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.WorkspaceDocument
@@ -51,6 +52,18 @@ class DocsViewModel(
 
     /** Full documents loaded for the detail screen, keyed by id. */
     val documentCache = mutableStateMapOf<String, WorkspaceDocument>()
+
+    /**
+     * Public link of each document that has one. A document listed in
+     * [resolvedShareIds] but absent here is known not to be shared, which is
+     * what lets the top bar tell "no link" apart from "not checked yet".
+     * Never cached to disk: a stale link would be shown as live long after it
+     * was revoked or moved to another revision.
+     */
+    private val shares = mutableStateMapOf<String, DocumentShare>()
+
+    var resolvedShareIds by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     var loadingDocumentIds by mutableStateOf<Set<String>>(emptySet())
         private set
@@ -209,6 +222,7 @@ class DocsViewModel(
             try {
                 repository.setArchived(id, archived)
                 documentCache.remove(id)
+                forgetShare(id)
                 refresh()
             } catch (e: CancellationException) {
                 throw e
@@ -230,6 +244,7 @@ class DocsViewModel(
             try {
                 repository.delete(id)
                 documentCache.remove(id)
+                forgetShare(id)
                 refresh()
                 onComplete(true)
             } catch (e: CancellationException) {
@@ -253,6 +268,58 @@ class DocsViewModel(
 
     suspend fun loadVersion(id: String, revision: Int): DocumentVersion =
         repository.loadVersion(id, revision)
+
+    /** Only the owner of a document may publish it, matching the web app. */
+    fun isOwnedBySignedInUser(document: WorkspaceDocument): Boolean =
+        document.ownerId.isNotEmpty() && document.ownerId == repository.currentUserId
+
+    fun shareOf(id: String): DocumentShare? = shares[id]
+
+    /**
+     * Resolves the link behind the top bar's share button. Only decides how
+     * that button reads, so a failure stays quiet; opening the sheet retries
+     * and reports it properly.
+     */
+    fun loadShareIfNeeded(id: String) {
+        if (id in resolvedShareIds) return
+        viewModelScope.launch {
+            try {
+                applyShare(id, repository.loadShare(id))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Left unresolved so the sheet can try again.
+            }
+        }
+    }
+
+    suspend fun refreshShare(id: String) = applyShare(id, repository.loadShare(id))
+
+    suspend fun publishShare(id: String, expires: String, republish: Boolean) =
+        applyShare(id, repository.publish(id, expires, republish))
+
+    suspend fun revokeShare(id: String) {
+        repository.unpublish(id)
+        applyShare(id, null)
+    }
+
+    private fun applyShare(id: String, share: DocumentShare?) {
+        if (share == null) shares.remove(id) else shares[id] = share
+        resolvedShareIds = resolvedShareIds + id
+    }
+
+    /**
+     * Drops what is known about a link rather than declaring it gone: after
+     * archiving or deleting, the next document that needs it asks the server.
+     */
+    private fun forgetShare(id: String) {
+        shares.remove(id)
+        resolvedShareIds = resolvedShareIds - id
+    }
+
+    /** Public address of a link, as a reader would open it in a browser. */
+    fun shareUrl(share: DocumentShare): String =
+        "${repository.shareBaseUrl.orEmpty()}/s/${share.slug}"
 
     fun locationName(projectId: String?, folderId: String?): String = when {
         projectId != null -> uiState.projects.firstOrNull { it.id == projectId }?.name ?: "Project"

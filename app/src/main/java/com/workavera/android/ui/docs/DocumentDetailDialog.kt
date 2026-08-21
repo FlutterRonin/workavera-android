@@ -27,10 +27,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -46,18 +49,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.workavera.android.data.model.DocumentKind
+import com.workavera.android.data.model.DocumentStatus
 import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.WorkspaceDocument
 import com.workavera.android.ui.components.ErrorBanner
 import com.workavera.android.ui.components.LoadingIndicator
 import com.workavera.android.ui.components.MarkdownContent
+import com.workavera.android.ui.components.MarkdownVariant
 import com.workavera.android.ui.notifications.RelativeTime
+
+/** iOS .green, marking a document that currently has a public link. */
+private val SharedLinkGreen = Color(0xFF34C759)
 
 /**
  * Full-screen document reader (iOS DocumentDetailView): markdown rendered to
@@ -73,8 +82,19 @@ internal fun DocumentDetailDialog(
     val document = viewModel.documentCache[documentId]
     val isLoading = documentId in viewModel.loadingDocumentIds
     var showVersions by remember { mutableStateOf(false) }
+    var showShare by remember { mutableStateOf(false) }
+    // Archiving already takes a public link out of service, and the server
+    // refuses to publish an archived document, so the action is offered only
+    // where it can do something.
+    val canShare = document != null &&
+        document.documentStatus == DocumentStatus.DRAFT &&
+        viewModel.isOwnedBySignedInUser(document)
+    val isShared = viewModel.shareOf(documentId) != null
 
     LaunchedEffect(documentId) { viewModel.loadDocument(documentId) }
+    LaunchedEffect(documentId, canShare) {
+        if (canShare) viewModel.loadShareIfNeeded(documentId)
+    }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize()) {
@@ -94,6 +114,31 @@ internal fun DocumentDetailDialog(
                             }
                         },
                         actions = {
+                            if (canShare) {
+                                IconButton(onClick = { showShare = true }) {
+                                    // Tinted while a link is live, as in the web
+                                    // app: the fact that a document is public
+                                    // belongs on the document, not only inside
+                                    // the sheet that made it so.
+                                    Icon(
+                                        imageVector = if (isShared) {
+                                            Icons.Outlined.Link
+                                        } else {
+                                            Icons.Outlined.Share
+                                        },
+                                        contentDescription = if (isShared) {
+                                            "Shared publicly"
+                                        } else {
+                                            "Share document"
+                                        },
+                                        tint = if (isShared) {
+                                            SharedLinkGreen
+                                        } else {
+                                            LocalContentColor.current
+                                        },
+                                    )
+                                }
+                            }
                             if (document != null) {
                                 IconButton(onClick = { showVersions = true }) {
                                     Icon(Icons.Outlined.History, contentDescription = "Version history")
@@ -122,6 +167,14 @@ internal fun DocumentDetailDialog(
             document = document,
             viewModel = viewModel,
             onDismiss = { showVersions = false },
+        )
+    }
+
+    if (showShare && document != null) {
+        DocumentShareSheet(
+            document = document,
+            viewModel = viewModel,
+            onDismiss = { showShare = false },
         )
     }
 }
@@ -163,6 +216,7 @@ private fun DocumentContent(document: WorkspaceDocument) {
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+            variant = MarkdownVariant.Document,
         )
     }
 }
@@ -332,6 +386,7 @@ private fun DocumentVersionDetailDialog(
                                         .fillMaxSize()
                                         .verticalScroll(rememberScrollState())
                                         .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 32.dp),
+                                    variant = MarkdownVariant.Document,
                                 )
                             }
                         }

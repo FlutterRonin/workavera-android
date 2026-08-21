@@ -2,6 +2,7 @@ package com.workavera.android.data
 
 import com.workavera.android.data.model.DocsPage
 import com.workavera.android.data.model.DocsViewFilter
+import com.workavera.android.data.model.DocumentShare
 import com.workavera.android.data.model.DocumentVersion
 import com.workavera.android.data.model.WorkspaceDocument
 import com.workavera.android.data.network.ApiException
@@ -15,9 +16,20 @@ class DocsRepository(
     private val cache: ResponseCache,
 ) {
 
-    private val session: AuthState.LoggedIn
+    private val loggedIn: AuthState.LoggedIn?
         get() = authRepository.state.value as? AuthState.LoggedIn
+
+    private val session: AuthState.LoggedIn
+        get() = loggedIn
             ?: throw ApiException(401, "Your session is no longer available. Sign in again.")
+
+    /** Owner of the current session; only an owner may publish a document. */
+    val currentUserId: String?
+        get() = loggedIn?.user?.id
+
+    /** Base address a public document link is built on. */
+    val shareBaseUrl: String?
+        get() = loggedIn?.server?.let { PocketBaseApi.normalizeServerAddress(it) }
 
     private fun pageCacheKey(view: DocsViewFilter, query: String, page: Int) =
         "docs.page|${session.server}|${session.user.id}|${view.cacheKey}|${query.trim()}|$page"
@@ -77,4 +89,16 @@ class DocsRepository(
 
     suspend fun delete(id: String) =
         api.deleteDocument(session.server, session.token, id)
+
+    // Share state is never cached: a stale link would be shown as live long
+    // after it was revoked or moved to another revision.
+
+    suspend fun loadShare(id: String): DocumentShare? =
+        api.getDocumentShare(session.server, session.token, id)
+
+    suspend fun publish(id: String, expires: String, republish: Boolean): DocumentShare =
+        api.publishDocument(session.server, session.token, id, expires, republish)
+
+    suspend fun unpublish(id: String) =
+        api.unpublishDocument(session.server, session.token, id)
 }
