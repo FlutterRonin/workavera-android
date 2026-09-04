@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -116,16 +115,11 @@ internal fun DocumentDetailDialog(
                         actions = {
                             if (canShare) {
                                 IconButton(onClick = { showShare = true }) {
-                                    // Tinted while a link is live, as in the web
-                                    // app: the fact that a document is public
-                                    // belongs on the document, not only inside
-                                    // the sheet that made it so.
+                                    // Same share icon in both states — a live
+                                    // link only highlights it green (iOS keeps
+                                    // square.and.arrow.up and tints it too).
                                     Icon(
-                                        imageVector = if (isShared) {
-                                            Icons.Outlined.Link
-                                        } else {
-                                            Icons.Outlined.Share
-                                        },
+                                        imageVector = Icons.Outlined.Share,
                                         contentDescription = if (isShared) {
                                             "Shared publicly"
                                         } else {

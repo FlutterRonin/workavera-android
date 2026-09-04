@@ -124,8 +124,15 @@ enum class DocumentShareExpiry(val label: String, val days: Int?) {
     THIRTY_DAYS("30 days from now", 30);
 
     /** Expiry for the request body; an empty string means "never expires". */
-    fun requestValue(share: DocumentShare?, now: Instant = Instant.now()): String {
-        if (this == KEEP) return share?.expires.orEmpty()
+    fun requestValue(share: DocumentShare?, now: Instant = Instant.now()): String =
+        requestValue(share?.expires, now)
+
+    /**
+     * Same as [requestValue] but from a share record's raw `expires` value, so
+     * other share types (e.g. board project links) can reuse the options.
+     */
+    fun requestValue(currentExpires: String?, now: Instant = Instant.now()): String {
+        if (this == KEEP) return currentExpires.orEmpty()
         val dayCount = days ?: return ""
         return PocketBaseApi.formatServerInstant(now.plus(dayCount.toLong(), ChronoUnit.DAYS))
     }

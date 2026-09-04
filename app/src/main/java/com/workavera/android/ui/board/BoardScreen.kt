@@ -1,5 +1,11 @@
 package com.workavera.android.ui.board
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,16 +35,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.EventAvailable
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Group
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Sell
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material.icons.outlined.ViewKanban
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,8 +63,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +77,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -73,8 +90,10 @@ import com.workavera.android.data.model.ArchivedBoardTask
 import com.workavera.android.data.model.BoardLabel
 import com.workavera.android.data.model.BoardMember
 import com.workavera.android.data.model.BoardProject
+import com.workavera.android.data.model.BoardProjectShare
 import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardTask
+import com.workavera.android.data.model.DocumentShareExpiry
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.ui.components.AvatarView
 import com.workavera.android.ui.components.DayPickerDialog
@@ -88,6 +107,7 @@ import com.workavera.android.ui.theme.color
 import com.workavera.android.ui.theme.parseHexColor
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -102,6 +122,23 @@ private val dueDateLongFormat =
     DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
 
 /**
+ * The card's date label: a start and a due on different days render as a
+ * span ("Jan 3 – Jan 9"); a single date, or both on the same day, renders as
+ * that one day (iOS TaskCard does the same).
+ */
+private fun taskDateSpanLabel(task: BoardTask): String? {
+    val start = task.startDay
+    val due = task.dueDay
+    return when {
+        start != null && due != null && start != due ->
+            "${dueDateShortFormat.format(start)} – ${dueDateShortFormat.format(due)}"
+        due != null -> dueDateShortFormat.format(due)
+        start != null -> dueDateShortFormat.format(start)
+        else -> null
+    }
+}
+
+/**
  * Board top-bar action (iOS toolbar archivebox); the archived-tasks sheet it
  * opens is rendered inside BoardScreen, which also reports whether a project
  * is selected so the scaffold can disable the action.
@@ -109,6 +146,10 @@ private val dueDateLongFormat =
 class BoardTopBarState {
     var showArchived by mutableStateOf(false)
     var hasProject by mutableStateOf(false)
+    /** Only a project's owner can publish it (iOS toolbar square.and.arrow.up). */
+    var isOwner by mutableStateOf(false)
+    var isShared by mutableStateOf(false)
+    var showShare by mutableStateOf(false)
 }
 
 /**
@@ -139,8 +180,19 @@ fun BoardScreen(
         ?: project?.states?.firstOrNull()
     LaunchedEffect(project?.id) {
         topBarState.hasProject = project != null
+        topBarState.isOwner = project != null && project.ownerId == state.user.id
         // Leaving the sheet open across a project switch would show the wrong list.
-        if (project == null) topBarState.showArchived = false
+        if (project == null) {
+            topBarState.showArchived = false
+            topBarState.showShare = false
+            topBarState.isShared = false
+        } else if (topBarState.isOwner) {
+            // Resolve the share eagerly so the toolbar can highlight it.
+            boardViewModel.loadShare(project.id)
+        }
+    }
+    LaunchedEffect(project?.id, ui.shares) {
+        topBarState.isShared = project?.id in ui.shares.keys
     }
     val selectedTask = selectedTaskId?.let { id ->
         ui.projects.flatMap { it.states }.flatMap { it.tasks }.firstOrNull { it.id == id }
@@ -232,6 +284,14 @@ fun BoardScreen(
         )
     }
 
+    if (topBarState.showShare && project != null) {
+        ProjectShareSheet(
+            project = project,
+            viewModel = boardViewModel,
+            onDismiss = { topBarState.showShare = false },
+        )
+    }
+
     if (selectedTask != null && project != null) {
         TaskDetailSheet(
             task = selectedTask,
@@ -243,6 +303,7 @@ fun BoardScreen(
                 }
             },
             onPriorityChange = { boardViewModel.updatePriority(selectedTask.id, it) },
+            onStartDateChange = { boardViewModel.updateStartDate(selectedTask.id, it) },
             onDueDateChange = { boardViewModel.updateDueDate(selectedTask.id, it) },
             onDismiss = { selectedTaskId = null },
         )
@@ -351,6 +412,7 @@ private fun TaskCard(
                 )
             }
             val hasMeta = task.priority != TaskPriority.NONE ||
+                task.startDate != null ||
                 task.dueDate != null ||
                 task.documentCount > 0
             if (hasMeta || task.assignees.isNotEmpty()) {
@@ -370,7 +432,7 @@ private fun TaskCard(
                         )
                         Spacer(Modifier.width(12.dp))
                     }
-                    task.dueDay?.let { dueDay ->
+                    taskDateSpanLabel(task)?.let { span ->
                         val overdue = task.isOverdue
                         Icon(
                             Icons.Outlined.DateRange,
@@ -384,7 +446,7 @@ private fun TaskCard(
                         )
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            text = dueDateShortFormat.format(dueDay),
+                            text = span,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (overdue) {
                                 MaterialTheme.colorScheme.error
@@ -873,10 +935,12 @@ private fun TaskDetailSheet(
     isUpdating: Boolean,
     onMove: (String) -> Unit,
     onPriorityChange: (TaskPriority) -> Unit,
+    onStartDateChange: (Instant?) -> Unit,
     onDueDateChange: (Instant?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var showDueDatePicker by remember { mutableStateOf(false) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -943,6 +1007,12 @@ private fun TaskDetailSheet(
                         onPriorityChange = onPriorityChange,
                     )
                     DetailDivider()
+                    StartDateRow(
+                        task = task,
+                        enabled = !isUpdating,
+                        onPick = { showStartDatePicker = true },
+                    )
+                    DetailDivider()
                     DueDateRow(
                         task = task,
                         enabled = !isUpdating,
@@ -970,11 +1040,23 @@ private fun TaskDetailSheet(
     }
 
     if (showDueDatePicker) {
-        DueDatePickerDialog(
+        TaskDatePickerDialog(
+            title = "Due Date",
+            clearLabel = "Clear Due Date",
             current = task.dueDate,
             onDismiss = { showDueDatePicker = false },
             onPicked = onDueDateChange,
             onClear = { onDueDateChange(null) },
+        )
+    }
+    if (showStartDatePicker) {
+        TaskDatePickerDialog(
+            title = "Start Date",
+            clearLabel = "Clear Start Date",
+            current = task.startDate,
+            onDismiss = { showStartDatePicker = false },
+            onPicked = onStartDateChange,
+            onClear = { onStartDateChange(null) },
         )
     }
 }
@@ -1119,6 +1201,21 @@ private fun PriorityRow(
 }
 
 @Composable
+private fun StartDateRow(
+    task: BoardTask,
+    enabled: Boolean,
+    onPick: () -> Unit,
+) {
+    DetailRow(
+        icon = Icons.Outlined.EventAvailable,
+        title = "Start Date",
+        value = task.startDay?.let { dueDateLongFormat.format(it) } ?: "No start date",
+        indicator = Icons.Outlined.ChevronRight,
+        onClick = if (enabled) onPick else null,
+    )
+}
+
+@Composable
 private fun DueDateRow(
     task: BoardTask,
     enabled: Boolean,
@@ -1142,15 +1239,17 @@ private fun DueDateRow(
 }
 
 /**
- * Due-date picker: the shared [DayPickerDialog], so the board and the calendar
- * event editor pick dates on the same month grid. Board due dates are
+ * Start / due date picker: the shared [DayPickerDialog], so the board and the
+ * calendar event editor pick dates on the same month grid. Board dates are
  * day-granular, so there is no time step and the pick is stored at UTC
  * midnight, exactly what the web board writes. Clearing lives in the dialog as
- * a destructive action, like the iOS due-date editor — the row itself stays a
+ * a destructive action, like the iOS date editors — the row itself stays a
  * plain value + chevron.
  */
 @Composable
-private fun DueDatePickerDialog(
+private fun TaskDatePickerDialog(
+    title: String,
+    clearLabel: String,
     current: Instant?,
     onDismiss: () -> Unit,
     onPicked: (Instant) -> Unit,
@@ -1161,7 +1260,7 @@ private fun DueDatePickerDialog(
         current?.atZone(ZoneOffset.UTC)?.toLocalDate() ?: today
     }
     DayPickerDialog(
-        title = "Due Date",
+        title = title,
         initialDate = initial,
         today = today,
         onDismiss = onDismiss,
@@ -1174,11 +1273,361 @@ private fun DueDatePickerDialog(
                         onDismiss()
                     },
                 ) {
-                    Text("Clear Due Date", color = MaterialTheme.colorScheme.error)
+                    Text(clearLabel, color = MaterialTheme.colorScheme.error)
                 }
             }
         } else {
             null
         },
     )
+}
+
+private val shareDateFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.getDefault())
+
+/**
+ * Share-project bottom sheet, mirroring the iOS ProjectShareSheet. Unlike a
+ * shared document the link pins nothing — it always shows the project as it
+ * stands — so there is no revision to republish, only an expiry to set and a
+ * link to revoke. Only the owner reaches this sheet.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProjectShareSheet(
+    project: BoardProject,
+    viewModel: BoardViewModel,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val share = viewModel.uiState.shares[project.id]
+    val loaded = project.id in viewModel.uiState.resolvedShareIds
+    var expiry by remember { mutableStateOf(DocumentShareExpiry.NEVER) }
+    var chineseDates by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    /** Brings the picker in line with the link the view model now holds. */
+    fun syncExpiry() {
+        expiry = if (viewModel.uiState.shares[project.id]?.expires.isNullOrEmpty()) {
+            DocumentShareExpiry.NEVER
+        } else {
+            DocumentShareExpiry.KEEP
+        }
+    }
+
+    /** The language parameter only formats dates, so it belongs to the link the owner hands out. */
+    fun linkUrl(): String? {
+        val base = viewModel.publicShareUrl(project.id) ?: return null
+        return if (chineseDates) "$base?lang=zh" else base
+    }
+
+    fun publish(nextExpiry: DocumentShareExpiry) {
+        if (working) return
+        working = true
+        viewModel.publishShare(
+            project.id,
+            nextExpiry.requestValue(share?.expires),
+        ) { success ->
+            working = false
+            if (success) {
+                error = null
+                syncExpiry()
+            } else {
+                error = "Could not update the share link."
+            }
+        }
+    }
+
+    fun revoke() {
+        if (working) return
+        working = true
+        viewModel.revokeShare(project.id) { success ->
+            working = false
+            if (success) {
+                error = null
+                syncExpiry()
+            } else {
+                error = "Could not revoke the share link."
+            }
+        }
+    }
+
+    LaunchedEffect(project.id) { syncExpiry() }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Text(
+                text = "Share Project",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Anyone with the link sees this project as it stands right now, " +
+                    "without signing in.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            ShareVisibilityRow(
+                icon = Icons.Outlined.Visibility,
+                text = "Task titles and descriptions, states, labels, dates, and member " +
+                    "names with their avatars.",
+            )
+            Spacer(Modifier.height(6.dp))
+            ShareVisibilityRow(
+                icon = Icons.Outlined.VisibilityOff,
+                text = "Archived tasks, activity records, assignees, and member emails " +
+                    "and roles stay private.",
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Archiving or deleting the project takes the link down immediately.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            if (error != null) {
+                ErrorBanner(
+                    message = error!!,
+                    onRetry = { viewModel.loadShare(project.id) },
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            when {
+                !loaded -> Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                }
+
+                share != null -> {
+                    val url = linkUrl()
+                    if (url != null) {
+                        ProjectShareLinkCard(
+                            url = url,
+                            chineseDates = chineseDates,
+                            onChineseDatesChange = { chineseDates = it },
+                            context = context,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
+                    ShareExpiryRow(
+                        share = share,
+                        selected = expiry,
+                        enabled = !working,
+                        onSelect = { option ->
+                            expiry = option
+                            publish(option)
+                        },
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    OutlinedButton(
+                        onClick = { revoke() },
+                        enabled = !working,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Revoke Link", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                else -> {
+                    ShareExpiryRow(
+                        share = null,
+                        selected = expiry,
+                        enabled = !working,
+                        onSelect = { expiry = it },
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = { publish(expiry) },
+                        enabled = !working,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (working) "Creating…" else "Create Link")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShareVisibilityRow(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier
+                .padding(top = 1.dp)
+                .size(15.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The link itself, the ways to hand it out, and the Chinese-date toggle. */
+@Composable
+private fun ProjectShareLinkCard(
+    url: String,
+    chineseDates: Boolean,
+    onChineseDatesChange: (Boolean) -> Unit,
+    context: Context,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+            .padding(16.dp),
+    ) {
+        Text(
+            text = url,
+            style = MaterialTheme.typography.bodySmall,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = { copyLink(context, url) }) {
+                Icon(
+                    Icons.Outlined.ContentCopy,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Copy")
+            }
+            TextButton(onClick = { sendLink(context, url) }) {
+                Icon(
+                    Icons.Outlined.Share,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Share")
+            }
+            TextButton(onClick = { openLink(context, url) }) {
+                Icon(
+                    Icons.Outlined.OpenInBrowser,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Open")
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Chinese date format (?lang=zh)",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(checked = chineseDates, onCheckedChange = onChineseDatesChange)
+        }
+    }
+}
+
+/**
+ * Expiry picker. "Keep" is offered only for a link that already expires, so
+ * every other change to it leaves that date where the creator set it.
+ */
+@Composable
+private fun ShareExpiryRow(
+    share: BoardProjectShare?,
+    selected: DocumentShareExpiry,
+    enabled: Boolean,
+    onSelect: (DocumentShareExpiry) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = buildList {
+        if (!share?.expires.isNullOrEmpty()) add(DocumentShareExpiry.KEEP)
+        add(DocumentShareExpiry.NEVER)
+        add(DocumentShareExpiry.SEVEN_DAYS)
+        add(DocumentShareExpiry.THIRTY_DAYS)
+    }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                .clickable(enabled = enabled) { expanded = true }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Expires",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = shareExpiryLabel(selected, share),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                Icons.Outlined.UnfoldMore,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SelectMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                SelectMenuItem(
+                    label = shareExpiryLabel(option, share),
+                    selected = option == selected,
+                    onClick = {
+                        expanded = false
+                        onSelect(option)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** "Keep" names the date it would keep, so the choice is never a guess. */
+private fun shareExpiryLabel(expiry: DocumentShareExpiry, share: BoardProjectShare?): String {
+    if (expiry != DocumentShareExpiry.KEEP) return expiry.label
+    val expiresAt = share?.expiresAt ?: return expiry.label
+    return "Keep ${shareDateFormat.format(expiresAt.atZone(ZoneId.systemDefault()))}"
+}
+
+private fun copyLink(context: Context, url: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Project link", url))
+    Toast.makeText(context, "Link copied", Toast.LENGTH_SHORT).show()
+}
+
+private fun sendLink(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, url)
+    }
+    context.startActivity(Intent.createChooser(intent, "Share link"))
+}
+
+private fun openLink(context: Context, url: String) {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 }

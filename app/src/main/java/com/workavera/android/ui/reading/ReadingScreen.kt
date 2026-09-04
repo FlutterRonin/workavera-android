@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.workavera.android.data.model.ReadingItem
 import com.workavera.android.data.model.ReadingListFilter
 import com.workavera.android.data.model.ReadingStatus
@@ -64,17 +65,22 @@ import com.workavera.android.ui.components.SearchTextField
 import com.workavera.android.ui.notifications.RelativeTime
 
 /**
- * Trigger for the reading action that lives in the home top bar (the iOS
- * toolbar plus button). The button is rendered by HomeScaffold; the sheet it
- * opens stays here. Mark-all-read is invoked on the hoisted view model
- * directly so the top bar can reflect unreadCount / isMarkingAllRead.
+ * Trigger for the reading actions that live in the home top bar (the iOS
+ * toolbar sparkle / plus buttons). The buttons are rendered by HomeScaffold;
+ * the sheets they open stay here.
  */
 class ReadingTopBarState {
     var addRequests by mutableStateOf(0)
         private set
+    var discoverRequests by mutableStateOf(0)
+        private set
 
     fun requestAdd() {
         addRequests++
+    }
+
+    fun requestDiscover() {
+        discoverRequests++
     }
 }
 
@@ -91,17 +97,23 @@ fun ReadingScreen(
     val ui = viewModel.uiState
     var searchInput by remember { mutableStateOf("") }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showDiscoverSheet by remember { mutableStateOf(false) }
     var selectedItem by remember { mutableStateOf<ReadingItem?>(null) }
     var deleteTarget by remember { mutableStateOf<ReadingItem?>(null) }
+    val discoverViewModel: ReadingDiscoverViewModel =
+        viewModel(key = "reading-discover", factory = ReadingDiscoverViewModel.Factory)
 
     LaunchedEffect(Unit) {
         viewModel.loadIfNeeded()
         searchInput = viewModel.uiState.query
     }
 
-    // Add button in the home top bar: each request opens the add sheet.
+    // Add / discover buttons in the home top bar: each request opens its sheet.
     LaunchedEffect(topBarState.addRequests) {
         if (topBarState.addRequests > 0) showAddSheet = true
+    }
+    LaunchedEffect(topBarState.discoverRequests) {
+        if (topBarState.discoverRequests > 0) showDiscoverSheet = true
     }
 
     ExpressivePullToRefreshBox(
@@ -184,6 +196,18 @@ fun ReadingScreen(
 
     if (showAddSheet) {
         AddReadingItemSheet(viewModel = viewModel, onDismiss = { showAddSheet = false })
+    }
+
+    if (showDiscoverSheet) {
+        ReadingDiscoverSheet(
+            viewModel = discoverViewModel,
+            onDismiss = {
+                showDiscoverSheet = false
+                // Kept candidates refresh the reading list here, on the way
+                // out, instead of after every save (iOS flushSaved).
+                if (discoverViewModel.consumeSavedCount() > 0) viewModel.refresh()
+            },
+        )
     }
 
     selectedItem?.let { item ->

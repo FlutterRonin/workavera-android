@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** Task priority, matching the iOS TaskPriority (colors are mapped in the UI layer). */
@@ -58,6 +59,8 @@ data class BoardTask(
     val description: String,
     val priority: TaskPriority,
     @Serializable(with = InstantSerializer::class)
+    val startDate: Instant?,
+    @Serializable(with = InstantSerializer::class)
     val dueDate: Instant?,
     val labels: List<BoardLabel>,
     val assignees: List<BoardMember>,
@@ -72,9 +75,39 @@ data class BoardTask(
     val dueDay: LocalDate?
         get() = dueDate?.atZone(ZoneOffset.UTC)?.toLocalDate()
 
+    /** The start day, read the same way as [dueDay]. */
+    val startDay: LocalDate?
+        get() = startDate?.atZone(ZoneOffset.UTC)?.toLocalDate()
+
     /** Overdue once the due day itself has passed, matching the web board. */
     val isOverdue: Boolean
         get() = dueDay?.isBefore(LocalDate.now()) == true
+
+    companion object {
+        /**
+         * The server rejects a start after the due date, so the client says so
+         * before a save can fail on it. Both dates stay optional.
+         */
+        fun isValidSpan(start: LocalDate?, due: LocalDate?): Boolean =
+            start == null || due == null || !start.isAfter(due)
+    }
+}
+
+/**
+ * A project's public preview link. Unlike a shared document it pins nothing:
+ * the link always shows the project as it stands, so there is no revision to
+ * republish — only an expiry to set and a link to revoke.
+ */
+@Serializable
+data class BoardProjectShare(
+    @SerialName("projectId") val projectId: String = "",
+    val slug: String = "",
+    val expires: String = "",
+    val created: String = "",
+    val updated: String = "",
+) {
+    /** Null means the link never expires. */
+    val expiresAt: Instant? get() = parseServerDate(expires)
 }
 
 @Serializable

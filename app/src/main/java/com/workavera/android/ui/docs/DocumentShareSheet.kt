@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.Button
@@ -275,6 +277,15 @@ private fun ShareLinkCard(url: String, context: Context) {
                 Spacer(Modifier.width(6.dp))
                 Text("Share")
             }
+            TextButton(onClick = { openLink(context, url) }) {
+                Icon(
+                    Icons.Outlined.OpenInBrowser,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Open")
+            }
         }
     }
 }
@@ -390,4 +401,8 @@ private fun sendLink(context: Context, url: String) {
         putExtra(Intent.EXTRA_TEXT, url)
     }
     context.startActivity(Intent.createChooser(intent, "Share link"))
+}
+
+private fun openLink(context: Context, url: String) {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 }

@@ -45,6 +45,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.workavera.android.data.model.AppNotification
 import com.workavera.android.data.model.AppNotificationType
 import com.workavera.android.data.model.ModelShareStatus
+import com.workavera.android.data.model.parseServerDate
 import com.workavera.android.ui.components.ActionMenu
 import com.workavera.android.ui.components.ActionMenuDivider
 import com.workavera.android.ui.components.ActionMenuItem
@@ -84,9 +86,21 @@ import com.workavera.android.ui.theme.StatusOnline
 fun NotificationsScreen(viewModel: NotificationViewModel) {
     val ui = viewModel.uiState
     var pendingDeleteId by remember { mutableStateOf<String?>(null) }
+    var selectedNotificationId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.loadIfNeeded()
+    }
+
+    val selectedNotification = selectedNotificationId?.let { id ->
+        ui.items.firstOrNull { it.id == id }
+    }
+    LaunchedEffect(selectedNotificationId, selectedNotification) {
+        // Auto-dismiss the detail sheet when the notification is deleted or
+        // leaves the page.
+        if (selectedNotificationId != null && selectedNotification == null) {
+            selectedNotificationId = null
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -102,6 +116,10 @@ fun NotificationsScreen(viewModel: NotificationViewModel) {
                     ui = ui,
                     viewModel = viewModel,
                     onDeleteRequest = { pendingDeleteId = it },
+                    onOpen = { notification ->
+                        if (!notification.isRead) viewModel.markRead(notification.id)
+                        selectedNotificationId = notification.id
+                    },
                 )
             }
         }
@@ -111,6 +129,15 @@ fun NotificationsScreen(viewModel: NotificationViewModel) {
             page = ui.page,
             totalPages = ui.totalPages,
             onPageChange = viewModel::loadPage,
+        )
+    }
+
+    selectedNotification?.let { notification ->
+        NotificationDetailSheet(
+            notification = notification,
+            isResponding = notification.id in ui.respondingShareIds,
+            onRespond = { accept -> viewModel.respondToModelShare(notification.id, accept) },
+            onDismiss = { selectedNotificationId = null },
         )
     }
 
@@ -145,6 +172,7 @@ private fun NotificationList(
     ui: NotificationUiState,
     viewModel: NotificationViewModel,
     onDeleteRequest: (String) -> Unit,
+    onOpen: (AppNotification) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -179,7 +207,7 @@ private fun NotificationList(
                 notification = notification,
                 isManaging = notification.id in ui.managingIds,
                 isResponding = notification.id in ui.respondingShareIds,
-                onMarkRead = { viewModel.markRead(notification.id) },
+                onOpen = { onOpen(notification) },
                 onArchive = { viewModel.archive(notification.id) },
                 onDelete = { onDeleteRequest(notification.id) },
                 onRespond = { accept -> viewModel.respondToModelShare(notification.id, accept) },
@@ -193,13 +221,13 @@ private fun NotificationCard(
     notification: AppNotification,
     isManaging: Boolean,
     isResponding: Boolean,
-    onMarkRead: () -> Unit,
+    onOpen: () -> Unit,
     onArchive: () -> Unit,
     onDelete: () -> Unit,
     onRespond: (Boolean) -> Unit,
 ) {
     Card(
-        onClick = onMarkRead,
+        onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -397,6 +425,83 @@ private fun ModelShareBlock(
             }
         }
     }
+}
+
+/**
+ * Detail sheet for one notification (iOS NotificationDetailSheet): the list
+ * row truncates title and body, so the sheet is where the full text lives,
+ * together with the model-share accept / reject actions.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotificationDetailSheet(
+    notification: AppNotification,
+    isResponding: Boolean,
+    onRespond: (Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TypeIcon(type = notification.notificationType, unread = false)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = when (notification.notificationType) {
+                        AppNotificationType.MODEL_SHARE -> "Model Share"
+                        AppNotificationType.TASK_DUE -> "Task Reminder"
+                        AppNotificationType.CALENDAR_EVENT -> "Calendar Event"
+                        AppNotificationType.UNKNOWN -> "Notification"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = notification.title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = notificationTimeLabel(notification.created),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (notification.body.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(16.dp))
+                Text(
+                    text = notification.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (notification.notificationType == AppNotificationType.MODEL_SHARE) {
+                ModelShareBlock(
+                    notification = notification,
+                    isResponding = isResponding,
+                    onRespond = onRespond,
+                )
+            }
+        }
+    }
+}
+
+private val notificationDateFormat =
+    java.time.format.DateTimeFormatter.ofPattern("MMM d, yyyy 'at' HH:mm", java.util.Locale.getDefault())
+
+/** "Mar 4, 2026 at 09:15 · 2 hours ago" — absolute first, then the relative form. */
+private fun notificationTimeLabel(created: String): String {
+    val instant = parseServerDate(created) ?: return RelativeTime.format(created)
+    val absolute = notificationDateFormat.format(instant.atZone(java.time.ZoneId.systemDefault()))
+    return "$absolute · ${RelativeTime.format(created)}"
 }
 
 @Composable

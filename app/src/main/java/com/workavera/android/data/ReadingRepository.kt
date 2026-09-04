@@ -1,9 +1,13 @@
 package com.workavera.android.data
 
+import com.workavera.android.data.model.CandidateSummary
+import com.workavera.android.data.model.DiscoverResponse
 import com.workavera.android.data.model.ReadingItem
 import com.workavera.android.data.model.ReadingItemInput
 import com.workavera.android.data.model.ReadingListFilter
 import com.workavera.android.data.model.ReadingPage
+import com.workavera.android.data.model.ReadingSource
+import com.workavera.android.data.model.ReadingSourceInput
 import com.workavera.android.data.model.ReadingStatus
 import com.workavera.android.data.model.ReadingSummaryResponse
 import com.workavera.android.data.network.ApiException
@@ -55,4 +59,27 @@ class ReadingRepository(
 
     suspend fun markAllRead(): Int =
         api.markAllReadingItemsRead(session.server, session.token)
+
+    // ---- Subscriptions (discover) ----
+
+    suspend fun loadSources(): List<ReadingSource> =
+        api.getReadingSources(session.server, session.token)
+
+    suspend fun createSource(input: ReadingSourceInput) =
+        api.createReadingSource(session.server, session.token, session.user.id, input)
+
+    suspend fun updateSource(id: String, input: ReadingSourceInput) =
+        api.updateReadingSource(session.server, session.token, id, input)
+
+    suspend fun setSourceEnabled(id: String, enabled: Boolean) =
+        api.setReadingSourceEnabled(session.server, session.token, id, enabled)
+
+    suspend fun deleteSource(id: String) =
+        api.deleteReadingSource(session.server, session.token, id)
+
+    suspend fun discover(sourceIds: List<String>): DiscoverResponse =
+        api.discoverReadingCandidates(session.server, session.token, sourceIds)
+
+    suspend fun summarizeCandidate(url: String, title: String, language: String): CandidateSummary =
+        api.summarizeReadingCandidate(session.server, session.token, url, title, language)
 }

@@ -12,6 +12,7 @@ import com.workavera.android.WorkaveraApplication
 import com.workavera.android.data.BoardRepository
 import com.workavera.android.data.model.ArchivedBoardTask
 import com.workavera.android.data.model.BoardProject
+import com.workavera.android.data.model.BoardProjectShare
 import com.workavera.android.data.model.BoardTask
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.network.ApiException
@@ -45,6 +46,10 @@ data class BoardUiState(
     val hasLoadedArchived: Boolean = false,
     val archivedError: String? = null,
     val restoringTaskIds: Set<String> = emptySet(),
+    /** Public preview links, keyed by project; never cached to disk. */
+    val shares: Map<String, BoardProjectShare> = emptyMap(),
+    /** Projects whose share state has been resolved; absent from [shares] means known-not-shared. */
+    val resolvedShareIds: Set<String> = emptySet(),
 )
 
 /**
@@ -202,6 +207,13 @@ class BoardViewModel(
     fun updateDueDate(taskId: String, dueDate: Instant?, onComplete: (Boolean) -> Unit = {}) {
         val location = findTask(taskId) ?: return
         if (taskId in uiState.updatingTaskIds) return
+        // A due date before the start date would render as a negative span,
+        // which the server rejects.
+        val dueDay = dueDate?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate()
+        if (!BoardTask.isValidSpan(location.task.startDay, dueDay)) {
+            onComplete(false)
+            return
+        }
 
         val oldDueDate = location.task.dueDate
         mutateTask(taskId) { it.copy(dueDate = dueDate) }
@@ -220,6 +232,95 @@ class BoardViewModel(
                 uiState = uiState.copy(updatingTaskIds = uiState.updatingTaskIds - taskId)
             }
         }
+    }
+
+    /** Changes the start date: optimistic single-field update, rolled back on failure; null clears it. */
+    fun updateStartDate(taskId: String, startDate: Instant?, onComplete: (Boolean) -> Unit = {}) {
+        val location = findTask(taskId) ?: return
+        if (taskId in uiState.updatingTaskIds) return
+        // The server rejects a start after the due date, so refuse it here
+        // before a save can fail on it.
+        val startDay = startDate?.atZone(java.time.ZoneOffset.UTC)?.toLocalDate()
+        if (!BoardTask.isValidSpan(startDay, location.task.dueDay)) {
+            onComplete(false)
+            return
+        }
+
+        val oldStartDate = location.task.startDate
+        mutateTask(taskId) { it.copy(startDate = startDate) }
+        uiState = uiState.copy(updatingTaskIds = uiState.updatingTaskIds + taskId)
+        viewModelScope.launch {
+            try {
+                repository.updateStartDate(taskId, startDate)
+                onComplete(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                mutateTask(taskId) { it.copy(startDate = oldStartDate) }
+                uiState = uiState.copy(error = errorMessage(e, "Could not update the start date."))
+                onComplete(false)
+            } finally {
+                uiState = uiState.copy(updatingTaskIds = uiState.updatingTaskIds - taskId)
+            }
+        }
+    }
+
+    // MARK: - Project public links
+
+    /** Resolves one project's share; the toolbar icon reports it, so this runs with the project, not the sheet. */
+    fun loadShare(projectId: String) {
+        if (projectId in uiState.resolvedShareIds) return
+        viewModelScope.launch {
+            try {
+                val share = repository.loadShare(projectId)
+                applyShare(projectId, share)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // A project that cannot report its share simply shows an unshared icon.
+            }
+        }
+    }
+
+    fun publishShare(projectId: String, expires: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                applyShare(projectId, repository.publishShare(projectId, expires))
+                onComplete(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uiState = uiState.copy(error = errorMessage(e, "Could not update the share link."))
+                onComplete(false)
+            }
+        }
+    }
+
+    fun revokeShare(projectId: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                repository.unpublishShare(projectId)
+                applyShare(projectId, null)
+                onComplete(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uiState = uiState.copy(error = errorMessage(e, "Could not revoke the share link."))
+                onComplete(false)
+            }
+        }
+    }
+
+    fun publicShareUrl(projectId: String): String? =
+        uiState.shares[projectId]?.let(repository::publicShareUrl)
+
+    private fun applyShare(projectId: String, share: BoardProjectShare?) {
+        val shares = uiState.shares.toMutableMap()
+        if (share == null) shares.remove(projectId) else shares[projectId] = share
+        uiState = uiState.copy(
+            shares = shares,
+            resolvedShareIds = uiState.resolvedShareIds + projectId,
+        )
     }
 
     /** Archives a task optimistically; archived tasks are excluded from normal Board queries. */

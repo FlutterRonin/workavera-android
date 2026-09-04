@@ -25,6 +25,7 @@ import com.workavera.android.data.model.BoardLabel
 import com.workavera.android.data.model.BoardMember
 import com.workavera.android.data.model.BoardPage
 import com.workavera.android.data.model.BoardProject
+import com.workavera.android.data.model.BoardProjectShare
 import com.workavera.android.data.model.BoardState
 import com.workavera.android.data.model.BoardStateCategory
 import com.workavera.android.data.model.BoardTask
@@ -47,10 +48,16 @@ import com.workavera.android.data.model.MemoryCategory
 import com.workavera.android.data.model.NotificationPage
 import com.workavera.android.data.model.NotificationRealtimeEvent
 import com.workavera.android.data.model.ProfileUpdate
+import com.workavera.android.data.model.CandidateSummary
+import com.workavera.android.data.model.DiscoverResponse
 import com.workavera.android.data.model.ReadingItem
 import com.workavera.android.data.model.ReadingItemInput
 import com.workavera.android.data.model.ReadingListFilter
 import com.workavera.android.data.model.ReadingPage
+import com.workavera.android.data.model.ReadingSource
+import com.workavera.android.data.model.ReadingSourceInput
+import com.workavera.android.data.model.ReadingSourceKind
+import com.workavera.android.data.model.ReadingSourceRecord
 import com.workavera.android.data.model.ReadingStatus
 import com.workavera.android.data.model.ReadingSummaryResponse
 import com.workavera.android.data.model.RecordListResponse
@@ -808,6 +815,7 @@ class PocketBaseApi(
         val labels: List<String> = emptyList(),
         val assignees: List<String> = emptyList(),
         val documents: List<String> = emptyList(),
+        @SerialName("start_date") val startDate: String = "",
         @SerialName("due_date") val dueDate: String = "",
         val rank: Double = 0.0,
     )
@@ -831,6 +839,12 @@ class PocketBaseApi(
 
     @Serializable
     private data class TaskDueDatePayload(@SerialName("due_date") val dueDate: String)
+
+    @Serializable
+    private data class TaskStartDatePayload(@SerialName("start_date") val startDate: String)
+
+    @Serializable
+    private data class BoardProjectSharePayload(val expires: String)
 
     @Serializable
     private data class ArchiveTaskPayload(val archived: Boolean)
@@ -986,6 +1000,7 @@ class PocketBaseApi(
                                 title = task.title,
                                 description = task.description,
                                 priority = TaskPriority.fromRaw(task.priority),
+                                startDate = parseServerDate(task.startDate),
                                 dueDate = parseServerDate(task.dueDate),
                                 labels = task.labels.mapNotNull { labelsById[it] },
                                 assignees = task.assignees.map {
@@ -1051,6 +1066,72 @@ class PocketBaseApi(
         header(HttpHeaders.Authorization, token)
         contentType(ContentType.Application.Json)
         setBody(TaskDueDatePayload(dueDate = dueDate?.let(::formatServerInstant) ?: ""))
+    }
+
+    /** Passing null for startDate sends an empty string to clear it. */
+    suspend fun updateBoardTaskStartDate(
+        server: String,
+        token: String,
+        id: String,
+        startDate: Instant?,
+    ) = requestEmpty(server, "api/collections/board_tasks/records/$id", HttpMethod.Patch) {
+        header(HttpHeaders.Authorization, token)
+        contentType(ContentType.Application.Json)
+        setBody(TaskStartDatePayload(startDate = startDate?.let(::formatServerInstant) ?: ""))
+    }
+
+    // MARK: - Board project shares
+
+    /**
+     * The public link of a project, or null when it has none: the endpoint
+     * answers a bare `null` instead of a 404, so "not shared" is a state
+     * rather than an error.
+     */
+    suspend fun getBoardProjectShare(
+        server: String,
+        token: String,
+        projectId: String,
+    ): BoardProjectShare? {
+        val response = send(server, "api/board/projects/$projectId/share", HttpMethod.Get) {
+            header(HttpHeaders.Authorization, token)
+        }
+        val body = response.bodyAsText().trim()
+        if (body.isEmpty() || body == "null") return null
+        return try {
+            json.decodeFromString(BoardProjectShare.serializer(), body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ApiException(
+                statusCode = response.status.value,
+                message = "The server returned data this version of Workavera could not read.",
+                cause = e,
+            )
+        }
+    }
+
+    /**
+     * Publishes the project, or updates the expiry of its existing link. An
+     * empty expiry means the link never expires. Only the owner may call this.
+     */
+    suspend fun publishBoardProject(
+        server: String,
+        token: String,
+        projectId: String,
+        expires: String,
+    ): BoardProjectShare =
+        request(server, "api/board/projects/$projectId/share", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(BoardProjectSharePayload(expires))
+        }
+
+    suspend fun unpublishBoardProject(
+        server: String,
+        token: String,
+        projectId: String,
+    ) = requestEmpty(server, "api/board/projects/$projectId/share", HttpMethod.Delete) {
+        header(HttpHeaders.Authorization, token)
     }
 
     suspend fun setBoardTaskArchived(
@@ -1440,6 +1521,11 @@ class PocketBaseApi(
         val description: String,
         val tags: List<String>,
         val status: String,
+        // Camel-case keys on purpose: the iOS client writes them this way and
+        // PocketBase maps them onto the snake_case fields.
+        val summary: String,
+        val keyPoints: List<String>,
+        val summaryLanguage: String,
     )
 
     @Serializable
@@ -1529,10 +1615,13 @@ class PocketBaseApi(
                 CreateReadingItemPayload(
                     owner = ownerId,
                     url = input.url,
-                    title = input.title,
+                    title = input.title.take(240),
                     description = input.description,
                     tags = input.tags,
                     status = input.status.raw,
+                    summary = input.summary,
+                    keyPoints = input.keyPoints,
+                    summaryLanguage = input.summaryLanguage,
                 ),
             )
         }
@@ -1571,6 +1660,164 @@ class PocketBaseApi(
         request<MarkAllReadingReadResponse>(server, "api/reading/items/read-all", HttpMethod.Post) {
             header(HttpHeaders.Authorization, token)
         }.updated
+
+    // ---- Reading subscriptions (discover), mirrors the iOS reading-sources API ----
+
+    @Serializable
+    private data class CreateReadingSourcePayload(
+        val owner: String,
+        val name: String,
+        val kind: String,
+        val url: String,
+        val params: Params? = null,
+        val enabled: Boolean,
+    )
+
+    @Serializable
+    private data class UpdateReadingSourcePayload(
+        val name: String,
+        val kind: String,
+        val url: String,
+        val params: Params? = null,
+        val enabled: Boolean,
+    )
+
+    @Serializable
+    private data class Params(val language: String, val since: String)
+
+    /** Trending sources carry no URL; RSS sources carry no params (iOS request bodies). */
+    private fun sourceFields(input: ReadingSourceInput) = SourceFields(
+        name = input.name.trim(),
+        kind = input.kind.raw,
+        url = if (input.kind == ReadingSourceKind.RSS) input.url.trim() else "",
+        params = if (input.kind == ReadingSourceKind.GITHUB_TRENDING) {
+            Params(input.language.trim().lowercase(), input.since.raw)
+        } else {
+            null
+        },
+        enabled = input.enabled,
+    )
+
+    private data class SourceFields(
+        val name: String,
+        val kind: String,
+        val url: String,
+        val params: Params?,
+        val enabled: Boolean,
+    )
+
+    @Serializable
+    private data class ReadingSourceEnabledPayload(val enabled: Boolean)
+
+    @Serializable
+    private data class DiscoverPayload(val sourceIds: List<String>)
+
+    @Serializable
+    private data class SummarizeCandidatePayload(
+        val url: String,
+        val title: String,
+        val language: String,
+    )
+
+    @Serializable
+    private data class SummarizeCandidateResponse(
+        val summary: String = "",
+        val keyPoints: List<String> = emptyList(),
+    )
+
+    /** Subscriptions live entirely on PocketBase's own CRUD (iOS getReadingSources). */
+    suspend fun getReadingSources(server: String, token: String): List<ReadingSource> =
+        listAll<ReadingSourceRecord>(server, token, "reading_sources", "", "name")
+            .map { it.source }
+
+    suspend fun createReadingSource(
+        server: String,
+        token: String,
+        ownerId: String,
+        input: ReadingSourceInput,
+    ): ReadingSourceRecord =
+        request(server, "api/collections/reading_sources/records", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            val fields = sourceFields(input)
+            setBody(
+                CreateReadingSourcePayload(
+                    owner = ownerId,
+                    name = fields.name,
+                    kind = fields.kind,
+                    url = fields.url,
+                    params = fields.params,
+                    enabled = fields.enabled,
+                ),
+            )
+        }
+
+    suspend fun updateReadingSource(
+        server: String,
+        token: String,
+        id: String,
+        input: ReadingSourceInput,
+    ): ReadingSourceRecord =
+        request(server, "api/collections/reading_sources/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            val fields = sourceFields(input)
+            setBody(
+                UpdateReadingSourcePayload(
+                    name = fields.name,
+                    kind = fields.kind,
+                    url = fields.url,
+                    params = fields.params,
+                    enabled = fields.enabled,
+                ),
+            )
+        }
+
+    suspend fun setReadingSourceEnabled(server: String, token: String, id: String, enabled: Boolean) =
+        requestEmpty(server, "api/collections/reading_sources/records/$id", HttpMethod.Patch) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(ReadingSourceEnabledPayload(enabled))
+        }
+
+    suspend fun deleteReadingSource(server: String, token: String, id: String) =
+        requestEmpty(server, "api/collections/reading_sources/records/$id", HttpMethod.Delete) {
+            header(HttpHeaders.Authorization, token)
+        }
+
+    /**
+     * Reads the enabled subscriptions and returns the candidates not stored
+     * yet, plus one failure per unreachable source so a broken feed cannot
+     * empty the panel silently (iOS discoverReadingCandidates).
+     */
+    suspend fun discoverReadingCandidates(
+        server: String,
+        token: String,
+        sourceIds: List<String>,
+    ): DiscoverResponse =
+        request(server, "api/reading/discover", HttpMethod.Post) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(DiscoverPayload(sourceIds))
+        }
+
+    /** Summarizes one candidate into the chosen language before anything is kept. */
+    suspend fun summarizeReadingCandidate(
+        server: String,
+        token: String,
+        url: String,
+        title: String,
+        language: String,
+    ): CandidateSummary {
+        val response = request<SummarizeCandidateResponse>(
+            server, "api/reading/discover/summarize", HttpMethod.Post,
+        ) {
+            header(HttpHeaders.Authorization, token)
+            contentType(ContentType.Application.Json)
+            setBody(SummarizeCandidatePayload(url, title, language))
+        }
+        return CandidateSummary(response.summary, response.keyPoints, language)
+    }
 
     // ---- Contacts (users directory + favorites, mirrors the iOS contacts API) ----
 

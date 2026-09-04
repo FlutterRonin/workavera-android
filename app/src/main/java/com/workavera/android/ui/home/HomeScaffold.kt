@@ -19,11 +19,13 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Create
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +33,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -51,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -265,28 +269,31 @@ private fun HomeContent(
                             Icon(Icons.Outlined.Edit, contentDescription = "Edit profile")
                         }
                     } else if (currentSection == AppSection.READING) {
-                        if (readingViewModel.uiState.unreadCount > 0) {
-                            IconButton(
-                                onClick = { readingViewModel.markAllRead() },
-                                enabled = !readingViewModel.uiState.isMarkingAllRead,
-                            ) {
-                                if (readingViewModel.uiState.isMarkingAllRead) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(18.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Outlined.CheckCircle,
-                                        contentDescription = "Mark all as read",
-                                    )
-                                }
-                            }
+                        IconButton(onClick = { readingTopBar.requestDiscover() }) {
+                            Icon(
+                                Icons.Outlined.AutoAwesome,
+                                contentDescription = "Discover reading candidates",
+                            )
                         }
                         IconButton(onClick = { readingTopBar.requestAdd() }) {
                             Icon(Icons.Filled.Add, contentDescription = "Add reading item")
                         }
                     } else if (currentSection == AppSection.BOARD) {
+                        // Sharing a project is owner-only; a shared link just
+                        // highlights the same icon (iOS square.and.arrow.up).
+                        if (boardTopBar.isOwner) {
+                            IconButton(onClick = { boardTopBar.showShare = true }) {
+                                Icon(
+                                    Icons.Outlined.Share,
+                                    contentDescription = "Share project",
+                                    tint = if (boardTopBar.isShared) {
+                                        Color(0xFF34A853)
+                                    } else {
+                                        LocalContentColor.current
+                                    },
+                                )
+                            }
+                        }
                         IconButton(
                             onClick = { boardTopBar.showArchived = true },
                             enabled = boardTopBar.hasProject,

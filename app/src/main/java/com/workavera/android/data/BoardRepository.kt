@@ -2,6 +2,7 @@ package com.workavera.android.data
 
 import com.workavera.android.data.model.ArchivedBoardTaskPage
 import com.workavera.android.data.model.BoardPage
+import com.workavera.android.data.model.BoardProjectShare
 import com.workavera.android.data.model.TaskPriority
 import com.workavera.android.data.network.ApiException
 import com.workavera.android.data.network.PocketBaseApi
@@ -41,6 +42,25 @@ class BoardRepository(
 
     suspend fun updateDueDate(id: String, dueDate: Instant?) =
         api.updateBoardTaskDueDate(session.server, session.token, id, dueDate)
+
+    suspend fun updateStartDate(id: String, startDate: Instant?) =
+        api.updateBoardTaskStartDate(session.server, session.token, id, startDate)
+
+    // MARK: - Project public links
+
+    /** Share state is never cached: a stale link would be shown as live long after it was revoked. */
+    suspend fun loadShare(projectId: String): BoardProjectShare? =
+        api.getBoardProjectShare(session.server, session.token, projectId)
+
+    suspend fun publishShare(projectId: String, expires: String): BoardProjectShare =
+        api.publishBoardProject(session.server, session.token, projectId, expires)
+
+    suspend fun unpublishShare(projectId: String) =
+        api.unpublishBoardProject(session.server, session.token, projectId)
+
+    /** Public address of a shared project's preview, as a reader would open it in a browser. */
+    fun publicShareUrl(share: BoardProjectShare): String =
+        "${session.server.trimEnd('/')}/p/${share.slug}"
 
     suspend fun archiveTask(id: String) =
         api.setBoardTaskArchived(session.server, session.token, id, archived = true)
