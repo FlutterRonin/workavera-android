@@ -10,6 +10,8 @@ Server-side changes are recorded separately, in the
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-04
+
 Needs a Workavera server on 0.1.1 or newer: task start dates, public project
 links, and subscription discovery are served by endpoints and fields that
 release adds. Upgrade the server first.
@@ -49,6 +51,8 @@ release adds. Upgrade the server first.
 
 ### Changed
 
+- The application logo is now Workavera's arced W with a floating dot,
+  replacing the previous robot mark across the launcher and in-app branding.
 - Reading's top bar drops its mark-all-read button; marking everything read
   stays available per item, and the space goes to the Discover sheet.
 
@@ -157,7 +161,8 @@ release adds. Upgrade the server first.
   blocks on the answer, so it is exempt from the throttle.
 - Approval tool cards stay expanded while a decision is pending.
 
-[Unreleased]: https://github.com/xusenlin/workavera-android/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/xusenlin/workavera-android/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/xusenlin/workavera-android/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/xusenlin/workavera-android/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/xusenlin/workavera-android/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/xusenlin/workavera-android/releases/tag/v1.0.1

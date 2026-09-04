@@ -4,8 +4,9 @@ The Android client for Workavera (Kotlin + Jetpack Compose), connecting to a
 self-hosted [Workavera](https://github.com/xusenlin/workavera) server
 (PocketBase). The module structure mirrors the Web / iOS apps.
 
-**This version needs a Workavera server on 0.0.10 or newer**, because task
-archiving reads a field added in that release. Upgrade the server first. The
+**This version needs a Workavera server on 0.1.1 or newer**, because task start
+dates, public project links, and subscription discovery depend on fields and
+endpoints added in that release. Upgrade the server first. The
 [server README](https://github.com/xusenlin/workavera#server-compatibility)
 carries the full version table.
 
@@ -15,7 +16,7 @@ carries the full version table.
 | --- | --- | --- |
 | ![Workavera Android drawer with Dashboard, Reading, Contacts, Chat, Board, Docs, Calendar and Settings](./screenShot/android-nav.jpg) | ![Workavera Android Board with project switcher, state chips, and task cards](./screenShot/android-board.jpg) | ![Workavera Android Chat streaming a reply with reasoning and tool-call cards](./screenShot/android-chat.jpg) |
 
-## Current status (1.0.3 preview)
+## Current status (1.0.4 preview)
 
 - ✅ Sign in: email + password (`auth-with-password`), configurable server
   address, plain-HTTP LAN addresses supported
