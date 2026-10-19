@@ -10,6 +10,20 @@ Server-side changes are recorded separately, in the
 
 ## [Unreleased]
 
+### Added
+
+- An Agenda home screen widget lists your next six or eight assigned task
+  deadlines and Calendar events, each marked with its date, in the system
+  language. At its default 4×2 size it shows one line per item; resized taller
+  it switches to date badges with the project, notes, or location beneath each
+  title. Its settings (shown when placing it, and from the widget's edit button)
+  choose the number of items (six by default) and whether to show tasks and
+  events, tasks only, or events only. Tapping it opens Calendar, and its AI
+  button opens Chat. A refresh button fetches the latest agenda from the server
+  without opening the app; otherwise the widget refreshes every 30 minutes,
+  whenever the Calendar loads in the app, and when you leave the app. Signing
+  out clears the widget.
+
 ## [1.0.4] - 2026-09-04
 
 Needs a Workavera server on 0.1.1 or newer: task start dates, public project

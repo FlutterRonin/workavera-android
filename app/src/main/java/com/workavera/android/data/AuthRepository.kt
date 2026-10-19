@@ -60,7 +60,7 @@ class AuthRepository(
 
         try {
             val auth = api.authRefresh(server, token)
-            settings.setAuthToken(auth.token, server)
+            settings.setAuthToken(auth.token, server, auth.record.id)
             _state.value = AuthState.LoggedIn(auth.record, auth.token, server)
         } catch (e: ApiException) {
             if (e.isAuthFailure) {
@@ -80,7 +80,7 @@ class AuthRepository(
         }
         val identity = email.trim()
         val auth = api.authWithPassword(server, identity, password)
-        settings.setAuthToken(auth.token, server)
+        settings.setAuthToken(auth.token, server, auth.record.id)
         settings.setLastLoginEmail(identity)
         _state.value = AuthState.LoggedIn(auth.record, auth.token, server)
     }
@@ -124,7 +124,7 @@ class AuthRepository(
         if (latest == null || latest.user.id != current.user.id || latest.token != current.token) {
             return
         }
-        settings.setAuthToken(auth.token, current.server)
+        settings.setAuthToken(auth.token, current.server, auth.record.id)
         _state.value = AuthState.LoggedIn(auth.record, auth.token, current.server)
         avatarRevision = UUID.randomUUID().toString()
     }
@@ -139,7 +139,7 @@ class AuthRepository(
         api.changePassword(current.server, current.token, current.user.id, currentPassword, newPassword)
         try {
             val auth = api.authWithPassword(current.server, current.user.email, newPassword)
-            settings.setAuthToken(auth.token, current.server)
+            settings.setAuthToken(auth.token, current.server, auth.record.id)
             _state.value = AuthState.LoggedIn(auth.record, auth.token, current.server)
         } catch (e: Exception) {
             if (e is CancellationException) throw e

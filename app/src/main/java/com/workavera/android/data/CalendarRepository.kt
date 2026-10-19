@@ -5,6 +5,7 @@ import com.workavera.android.data.model.CalendarEventInput
 import com.workavera.android.data.model.CalendarSnapshot
 import com.workavera.android.data.network.ApiException
 import com.workavera.android.data.network.PocketBaseApi
+import com.workavera.android.widget.AgendaWidgetRepository
 import kotlinx.coroutines.flow.Flow
 
 /** Calendar data entry point: session passthrough + disk cache for the snapshot. */
@@ -12,6 +13,7 @@ class CalendarRepository(
     private val api: PocketBaseApi,
     private val authRepository: AuthRepository,
     private val cache: ResponseCache,
+    private val agendaWidget: AgendaWidgetRepository,
 ) {
 
     private val session: AuthState.LoggedIn
@@ -25,7 +27,7 @@ class CalendarRepository(
     fun cachedSnapshot(): CalendarSnapshot? =
         cache.read(cacheKey, CalendarSnapshot.serializer())
 
-    /** Network load, writing through to the disk cache on success. */
+    /** Network load, writing through to the disk cache (and the Agenda widget) on success. */
     suspend fun loadSnapshot(): CalendarSnapshot {
         val snapshot = api.getCalendarSnapshot(
             session.server,
@@ -33,6 +35,7 @@ class CalendarRepository(
             session.user.id,
         )
         cache.write(cacheKey, CalendarSnapshot.serializer(), snapshot)
+        agendaWidget.publish(snapshot)
         return snapshot
     }
 

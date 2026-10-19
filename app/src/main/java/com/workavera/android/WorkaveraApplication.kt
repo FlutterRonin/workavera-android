@@ -26,6 +26,7 @@ import com.workavera.android.data.ResponseCache
 import com.workavera.android.data.SavedMemoriesRepository
 import com.workavera.android.data.SettingsRepository
 import com.workavera.android.data.network.PocketBaseApi
+import com.workavera.android.widget.AgendaWidgetRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -63,7 +64,10 @@ class AppContainer(context: Context) {
     val notificationRepository = NotificationRepository(api, authRepository, responseCache)
     val boardRepository = BoardRepository(api, authRepository, responseCache)
     val llmModelsRepository = LlmModelsRepository(api, authRepository, responseCache)
-    val calendarRepository = CalendarRepository(api, authRepository, responseCache)
+    val agendaWidget = AgendaWidgetRepository(context, api, settings, json).also {
+        it.followSession(authRepository.state)
+    }
+    val calendarRepository = CalendarRepository(api, authRepository, responseCache, agendaWidget)
     val chatRepository = ChatRepository(api, authRepository, responseCache)
     val docsRepository = DocsRepository(api, authRepository, responseCache)
     val readingRepository = ReadingRepository(api, authRepository, responseCache)

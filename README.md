@@ -89,6 +89,7 @@ app/src/main/java/com/workavera/android/
 │   ├── DashboardRepository.kt
 │   ├── BoardRepository.kt
 │   └── NotificationRepository.kt
+├── widget/                   # Agenda home screen widget (Glance): snapshot, refresh, configuration
 └── ui/
     ├── WorkaveraApp.kt       # root router: switches screens by auth state
     ├── AppSection.kt         # menu definition for all modules (matches Web/iOS)

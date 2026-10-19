@@ -25,6 +25,7 @@ class SettingsRepository(private val context: Context) {
         val LAST_LOGIN_EMAIL = stringPreferencesKey("last_login_email")
         val AUTH_TOKEN = stringPreferencesKey("auth_token")
         val AUTH_TOKEN_SERVER = stringPreferencesKey("auth_token_server")
+        val AUTH_USER_ID = stringPreferencesKey("auth_user_id")
         val APPEARANCE = stringPreferencesKey("appearance")
     }
 
@@ -47,6 +48,13 @@ class SettingsRepository(private val context: Context) {
     val authTokenServer: Flow<String> =
         context.dataStore.data.map { it[Keys.AUTH_TOKEN_SERVER] ?: "" }
 
+    /**
+     * The signed-in user's id, saved with the token so the Agenda widget can
+     * fetch that user's task deadlines without the app's UI running.
+     */
+    val authUserId: Flow<String> =
+        context.dataStore.data.map { it[Keys.AUTH_USER_ID] ?: "" }
+
     suspend fun setServerAddress(address: String) {
         context.dataStore.edit { it[Keys.SERVER_ADDRESS] = address.trim() }
     }
@@ -59,10 +67,11 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { it[Keys.APPEARANCE] = appearance.raw }
     }
 
-    suspend fun setAuthToken(token: String, server: String) {
+    suspend fun setAuthToken(token: String, server: String, userId: String) {
         context.dataStore.edit {
             it[Keys.AUTH_TOKEN] = token
             it[Keys.AUTH_TOKEN_SERVER] = server
+            it[Keys.AUTH_USER_ID] = userId
         }
     }
 
@@ -70,6 +79,7 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit {
             it.remove(Keys.AUTH_TOKEN)
             it.remove(Keys.AUTH_TOKEN_SERVER)
+            it.remove(Keys.AUTH_USER_ID)
         }
     }
 }

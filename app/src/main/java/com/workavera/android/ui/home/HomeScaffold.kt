@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -85,6 +86,7 @@ import com.workavera.android.ui.profile.ProfileTopBarState
 import com.workavera.android.ui.reading.ReadingScreen
 import com.workavera.android.ui.reading.ReadingTopBarState
 import com.workavera.android.ui.reading.ReadingViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -93,7 +95,11 @@ import kotlinx.coroutines.launch
  * button, mirroring the iOS NavigationSplitView.
  */
 @Composable
-fun HomeScaffold(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
+fun HomeScaffold(
+    state: AuthState.LoggedIn,
+    viewModel: AuthViewModel,
+    requestedSection: MutableStateFlow<AppSection?>,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentSection =
@@ -106,6 +112,14 @@ fun HomeScaffold(state: AuthState.LoggedIn, viewModel: AuthViewModel) {
             launchSingleTop = true
             restoreState = true
         }
+    }
+
+    // Sections opened from outside the app, e.g. by the Agenda widget.
+    val requested by requestedSection.collectAsStateWithLifecycle()
+    LaunchedEffect(requested) {
+        val section = requested ?: return@LaunchedEffect
+        openSection(section)
+        requestedSection.value = null
     }
 
     if (isExpandedWidth) {

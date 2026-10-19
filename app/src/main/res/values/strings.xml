@@ -1,4 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Workavera</string>
+
+    <!-- Agenda home screen widget, matching the iOS widget's strings. -->
+    <string name="agenda_widget_name">Agenda</string>
+    <string name="agenda_widget_description">Your upcoming tasks and events, each marked with its date.</string>
+    <string name="agenda_widget_configure_description">Choose what the upcoming list shows.</string>
+    <string name="agenda_widget_show">Show</string>
+    <string name="agenda_widget_content_all">Tasks and Events</string>
+    <string name="agenda_widget_content_tasks">Tasks Only</string>
+    <string name="agenda_widget_content_events">Events Only</string>
+    <string name="agenda_widget_items">Items</string>
+    <string name="agenda_widget_items_six">6 Items</string>
+    <string name="agenda_widget_items_eight">8 Items</string>
+    <string name="agenda_widget_done">Done</string>
+    <string name="agenda_widget_all_day">All day</string>
+    <string name="agenda_widget_due">Due</string>
+    <string name="agenda_widget_signed_out">Open Workavera to sign in.</string>
+    <string name="agenda_widget_unavailable">Couldn\'t reach your server.</string>
+    <string name="agenda_widget_loading">Loading…</string>
+    <string name="agenda_widget_empty">Nothing coming up.</string>
+    <string name="agenda_widget_open_chat">Open Chat</string>
+    <string name="agenda_widget_refresh">Refresh</string>
+    <!-- Widget picker preview. -->
+    <string name="agenda_widget_sample_today">Today</string>
+    <string name="agenda_widget_sample_tomorrow">Tomorrow</string>
+    <string name="agenda_widget_sample_standup">Team standup</string>
+    <string name="agenda_widget_sample_design">Design review</string>
+    <string name="agenda_widget_sample_review">Review release notes</string>
+    <string name="agenda_widget_sample_dinner">Team dinner</string>
 </resources>

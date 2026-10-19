@@ -15,10 +15,12 @@ import com.workavera.android.data.AuthState
 import com.workavera.android.ui.home.HomeScaffold
 import com.workavera.android.ui.login.LoginScreen
 import com.workavera.android.ui.login.SessionRecoveryScreen
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Root router: switches between restoring / recovery-failed / sign-in / home by auth state. */
 @Composable
 fun WorkaveraApp(
+    requestedSection: MutableStateFlow<AppSection?>,
     viewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory),
 ) {
     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -35,7 +37,7 @@ fun WorkaveraApp(
                 onSignInAgain = viewModel::abandonRecovery,
             )
             AuthState.LoggedOut -> LoginScreen(viewModel)
-            is AuthState.LoggedIn -> HomeScaffold(state, viewModel)
+            is AuthState.LoggedIn -> HomeScaffold(state, viewModel, requestedSection)
         }
     }
 }

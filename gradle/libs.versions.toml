@@ -18,6 +18,8 @@ coil = "3.1.0"
 markdownRenderer = "0.37.0"
 # Image cropper (move & scale) for the avatar flow.
 easycrop = "0.1.1"
+# Home screen widget (Agenda), written in Compose-style Glance.
+glance = "1.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -44,6 +46,7 @@ markdown-renderer-android = { group = "com.mikepenz", name = "multiplatform-mark
 markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 markdown-renderer-coil3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-coil3", version.ref = "markdownRenderer" }
 easycrop = { group = "io.github.mr0xf00", name = "easycrop", version.ref = "easycrop" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

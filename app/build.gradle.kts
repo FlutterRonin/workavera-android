@@ -114,5 +114,8 @@ dependencies {
     // Move-and-scale image cropper for the avatar flow.
     implementation(libs.easycrop)
 
+    // Agenda home screen widget.
+    implementation(libs.androidx.glance.appwidget)
+
     testImplementation(kotlin("test"))
 }

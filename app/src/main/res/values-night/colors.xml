@@ -2,4 +2,12 @@
 <resources>
     <!-- 暗色主题为浅色笔画（对应 iOS logo-dark.svg）。 -->
     <color name="logo_body">#FAFAFA</color>
+
+    <color name="agenda_widget_background">#1C1C1E</color>
+    <color name="agenda_widget_primary">#EBEBEB</color>
+    <color name="agenda_widget_secondary">#98989F</color>
+    <color name="agenda_widget_today">#FF453A</color>
+    <color name="agenda_widget_chat">#BF5AF2</color>
+    <color name="agenda_widget_chat_fill">#29BF5AF2</color>
+    <color name="agenda_widget_neutral_fill">#2E8E8E93</color>
 </resources>

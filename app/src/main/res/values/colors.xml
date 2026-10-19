@@ -2,4 +2,13 @@
 <resources>
     <!-- Workavera logo：亮色主题为深墨色笔画（对应 iOS logo-light.svg）。 -->
     <color name="logo_body">#1A1A1A</color>
+
+    <!-- Agenda widget surfaces (mirrors the widget's day/night ColorProviders). -->
+    <color name="agenda_widget_background">#FFFFFF</color>
+    <color name="agenda_widget_primary">#1A1A1A</color>
+    <color name="agenda_widget_secondary">#6E6E73</color>
+    <color name="agenda_widget_today">#FF3B30</color>
+    <color name="agenda_widget_chat">#AF52DE</color>
+    <color name="agenda_widget_chat_fill">#24AF52DE</color>
+    <color name="agenda_widget_neutral_fill">#1F8E8E93</color>
 </resources>

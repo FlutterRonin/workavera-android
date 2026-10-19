@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="agenda_widget_name">日程</string>
+    <string name="agenda_widget_description">按日期列出接下来的待办和事件。</string>
+    <string name="agenda_widget_configure_description">选择列表显示的内容。</string>
+    <string name="agenda_widget_show">显示</string>
+    <string name="agenda_widget_content_all">待办和事件</string>
+    <string name="agenda_widget_content_tasks">仅待办</string>
+    <string name="agenda_widget_content_events">仅事件</string>
+    <string name="agenda_widget_items">条数</string>
+    <string name="agenda_widget_items_six">6 条</string>
+    <string name="agenda_widget_items_eight">8 条</string>
+    <string name="agenda_widget_done">完成</string>
+    <string name="agenda_widget_all_day">全天</string>
+    <string name="agenda_widget_due">截止</string>
+    <string name="agenda_widget_signed_out">请打开 Workavera 登录</string>
+    <string name="agenda_widget_unavailable">无法连接服务器</string>
+    <string name="agenda_widget_loading">正在加载…</string>
+    <string name="agenda_widget_empty">近期没有安排</string>
+    <string name="agenda_widget_open_chat">打开 AI 对话</string>
+    <string name="agenda_widget_refresh">刷新</string>
+    <string name="agenda_widget_sample_today">今天</string>
+    <string name="agenda_widget_sample_tomorrow">明天</string>
+    <string name="agenda_widget_sample_standup">团队站会</string>
+    <string name="agenda_widget_sample_design">设计评审</string>
+    <string name="agenda_widget_sample_review">审阅发布说明</string>
+    <string name="agenda_widget_sample_dinner">团队聚餐</string>
+</resources>
